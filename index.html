@@ -1,0 +1,2175 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkFlow Board</title>
+<link id="favicon" rel="icon" type="image/png" href="logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+  firebase.initializeApp({
+    apiKey: "AIzaSyB2NsQHxZFgX2xJgBEqFC5C8OrPHPOwKbs",
+    authDomain: "workflow-board.firebaseapp.com",
+    projectId: "workflow-board",
+    storageBucket: "workflow-board.firebasestorage.app",
+    messagingSenderId: "336829824172",
+    appId: "1:336829824172:web:5df32864a06f938852f309"
+  });
+  const db = firebase.firestore();
+</script>
+<style>
+:root {
+  --bg: #282828;
+  --col: #2f2f2f;
+  --col-border: #3a3a3a;
+  --accent: #7c6aff;
+  --accent2: #ff6a9b;
+  --accent3: #4fffb0;
+  --text: #e8e8f2;
+  --muted: #888888;
+  --surface: #323232;
+  --modal-bg: rgba(16,16,16,0.93);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Syne',sans-serif; min-height:100vh; overflow-x:hidden; }
+
+/* ── INTRO ── */
+#intro {
+  position:fixed; inset:0; z-index:2000; background:var(--bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px;
+  transition:opacity 0.9s ease, visibility 0.9s ease;
+}
+#intro.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+#introIcon {
+  width:200px; height:200px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:60px; font-weight:800;
+  background:linear-gradient(135deg,#e3e3e3,#ffffff);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  animation:introFade 0.6s ease both;
+}
+#introIcon img {
+  width:200px; height:200px; object-fit:contain;
+  animation:introFade 0.6s ease both;
+}
+@keyframes introFade { from{opacity:0} to{opacity:1} }
+.intro-dots { display:flex; gap:7px; animation:fadeUp 0.8s 0.5s both; }
+.intro-dots span { width:5px; height:5px; border-radius:50%; background:#e3e3e3; animation:dotPop 1.1s ease infinite; }
+.intro-dots span:nth-child(2){animation-delay:0.18s} .intro-dots span:nth-child(3){animation-delay:0.36s}
+@keyframes dotPop { 0%,100%{background:#e3e3e3;transform:scale(1)} 50%{background:#ffffff;transform:scale(1.5)} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── AMBIENT ── */
+body::before { content:''; position:fixed; top:-300px; left:-200px; width:700px; height:700px; background:radial-gradient(circle,rgba(255,255,255,0.07) 0%,transparent 65%); pointer-events:none; z-index:0; }
+
+/* ── APP ── */
+.app { opacity:0; transition:opacity 0.9s ease 0.3s; height:100vh; max-height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+.app.visible { opacity:1; }
+
+/* ── TOPBAR ── */
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 28px; border-bottom:1px solid var(--col-border); animation:fadeDown 0.5s ease both; position:relative; z-index:10; }
+.logo-area { display:flex; align-items:center; gap:14px; }
+.logo-box { width:80px; height:80px; border-radius:0; border:none; background:transparent; display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--muted); transition:all 0.2s; cursor:pointer; overflow:hidden; }
+.logo-box:hover { color:#e3e3e3; }
+.logo-box img { width:100%; height:100%; object-fit:contain; }
+.brand { font-size:18px; font-weight:800; letter-spacing:-0.02em; background:linear-gradient(135deg,var(--text) 60%,var(--muted) 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.stats-mini { display:flex; gap:20px; font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); overflow:visible; }
+.stats-mini b { color:var(--text); font-weight:700; }
+
+/* ── VIEW TABS ── */
+.view-tabs { display:flex; align-items:center; gap:4px; background:var(--bg); border:1px solid var(--col-border); border-radius:10px; padding:3px; }
+.view-tab { background:transparent; border:none; border-radius:7px; padding:6px 16px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
+.view-tab:hover { color:#e3e3e3; }
+.view-tab.active { background:var(--surface); color:#e3e3e3; }
+
+/* ── GANTT ── */
+.gantt-wrap { flex:1; padding:24px 28px; overflow-x:auto; animation:fadeUp 0.35s ease both; }
+.gantt-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:80px 20px; color:var(--muted); font-family:'DM Mono',monospace; font-size:12px; text-align:center; opacity:0.5; }
+.gantt-empty-icon { font-size:40px; opacity:0.3; }
+.gantt-container { min-width:700px; }
+.gantt-header-row { display:flex; margin-bottom:6px; padding-left:220px; }
+.gantt-day-label { font-family:'DM Mono',monospace; font-size:9px; color:var(--muted); text-align:center; flex-shrink:0; letter-spacing:0.05em; }
+.gantt-today-label { color:#7c6aff; font-weight:700; }
+.gantt-row { display:flex; align-items:center; margin-bottom:8px; min-height:38px; }
+.gantt-row-label { width:220px; flex-shrink:0; padding-right:16px; display:flex; flex-direction:column; gap:2px; overflow:hidden; }
+.gantt-row-title { font-size:12px; font-weight:700; letter-spacing:-0.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+.gantt-row-cat { font-family:'DM Mono',monospace; font-size:9px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gantt-timeline { flex:1; position:relative; height:38px; display:flex; align-items:center; }
+.gantt-grid-line { position:absolute; top:0; bottom:0; width:1px; background:var(--col-border); opacity:0.5; }
+.gantt-grid-today { background:#7c6aff; opacity:0.3; width:2px; }
+.gantt-bar-track { position:absolute; left:0; right:0; height:28px; background:var(--col); border-radius:6px; }
+.gantt-bar { position:absolute; height:28px; border-radius:6px; display:flex; align-items:center; padding:0 10px; overflow:hidden; transition:opacity 0.2s; cursor:default; min-width:4px; }
+.gantt-bar:hover { opacity:0.85; }
+.gantt-bar-label { font-size:10px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; mix-blend-mode:normal; }
+.gantt-bar.status-done { opacity:0.45; }
+.gantt-bar.status-over { animation:dlPulse 2.5s ease infinite; }
+.gantt-deadline-pin { position:absolute; top:4px; bottom:4px; width:2px; border-radius:1px; }
+.gantt-sep { height:1px; background:var(--col-border); margin:4px 0 12px 0; opacity:0.4; }
+.gantt-legend { display:flex; gap:18px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px solid var(--col-border); }
+.gantt-legend-item { display:flex; align-items:center; gap:7px; font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); }
+.gantt-legend-dot { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+
+/* ── CHAT ── */
+/* ── CHAT ── */
+
+/* ── FAB ── */
+.fab-wrap { position:fixed; bottom:32px; right:32px; z-index:100; display:none; flex-direction:column; align-items:flex-end; gap:12px; }
+.fab-wrap.visible { display:flex; }
+.fab-main {
+  width:56px; height:56px; border-radius:50%; background:#e3e3e3; border:none;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  font-size:20px; color:#282828;
+  box-shadow:0 8px 32px rgba(255,255,255,0.15);
+  transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  position:relative; z-index:2;
+}
+.fab-main:hover { transform:scale(1.1); box-shadow:0 12px 40px rgba(255,255,255,0.3); }
+.fab-main.open { background:#e3e3e3; }
+.fab-main i { transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1); }
+.fab-main.open i { transform:rotate(90deg); }
+.fab-children { display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
+.fab-child {
+  display:flex; align-items:center; gap:10px;
+  opacity:0; transform:translateY(12px) scale(0.9);
+  transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events:none;
+}
+.fab-wrap.open .fab-child { opacity:1; transform:translateY(0) scale(1); pointer-events:auto; }
+.fab-wrap.open .fab-child:nth-child(1) { transition-delay:0.05s; }
+.fab-wrap.open .fab-child:nth-child(2) { transition-delay:0.0s; }
+.fab-child-btn {
+  width:46px; height:46px; border-radius:50%;
+  background:var(--surface); border:1.5px solid var(--col-border);
+  color:var(--text); font-size:17px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:all 0.2s; box-shadow:0 4px 16px rgba(0,0,0,0.3);
+}
+.fab-child-btn:hover { background:#e3e3e3; color:#282828; border-color:#e3e3e3; transform:scale(1.08); }
+.fab-child-label {
+  font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.08em;
+  color:var(--text); background:var(--surface); border:1px solid var(--col-border);
+  padding:4px 10px; border-radius:7px; white-space:nowrap;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* ── BOARD WRAP ── */
+.board-wrap { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+.empty-board { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:60px 20px; animation:fadeUp 0.5s 0.3s both; }
+.empty-board-icon { font-size:48px; opacity:0.15; }
+.empty-board-text { font-family:'DM Mono',monospace; font-size:13px; letter-spacing:0.08em; color:var(--muted); text-align:center; line-height:1.8; }
+.add-cat-btn { display:flex; align-items:center; gap:10px; background:transparent; border:1.5px dashed var(--col-border); border-radius:12px; padding:12px 24px; color:var(--muted); font-family:'Syne',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+.add-cat-btn:hover { border-color:#e3e3e3; color:#e3e3e3; background:rgba(227,227,227,0.06); }
+.board { display:grid; grid-template-columns:repeat(var(--col-count,1),1fr); min-height:calc(100vh - 121px); }
+.column { border-right:1px solid var(--col-border); display:flex; flex-direction:column; animation:fadeDown 0.4s ease both; }
+.column:last-child { border-right:none; }
+.col-header { padding:18px 20px 14px; border-bottom:1px solid var(--col-border); display:flex; align-items:center; justify-content:space-between; background:var(--col); position:sticky; top:0; z-index:5; }
+.col-title { display:flex; align-items:center; gap:10px; }
+.col-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.col-name { font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; }
+.col-name:hover { opacity:0.7; }
+.col-header-right { display:flex; align-items:center; gap:8px; }
+.col-count { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); background:var(--bg); border:1px solid var(--col-border); padding:2px 8px; border-radius:99px; }
+.col-del-btn { background:transparent; border:none; color:var(--muted); cursor:pointer; padding:3px; border-radius:5px; transition:all 0.2s; opacity:0; display:flex; align-items:center; }
+.col-header:hover .col-del-btn { opacity:1; }
+.col-del-btn:hover { color:#e3e3e3; }
+.col-body { flex:1; padding:14px 12px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
+
+/* ── TASK CARD ── */
+.task-card { background:var(--surface); border:1px solid var(--col-border); border-radius:14px; overflow:hidden; cursor:pointer; transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1); animation:cardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both; position:relative; }
+@keyframes cardIn { from{opacity:0;transform:scale(0.92) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+.task-card:hover { border-color:rgba(227,227,227,0.25); transform:translateY(-2px); box-shadow:0 8px 28px rgba(0,0,0,0.35); }
+.task-card.done { opacity:0.5; }
+.task-card.done:hover { opacity:0.75; }
+.task-card.in-progress { border-color:rgba(245,158,11,0.3); }
+.task-card.not-done { border-color:rgba(255,77,106,0.3); }
+.card-accent-line { height:3px; width:100%; }
+.card-img { width:100%; height:110px; object-fit:cover; display:block; cursor:zoom-in; }
+.card-body { padding:13px 14px 14px; }
+.card-title { font-size:14px; font-weight:700; line-height:1.3; margin-bottom:6px; letter-spacing:-0.01em; }
+.task-card.done .card-title { text-decoration:line-through; color:var(--muted); }
+.card-desc { font-size:12px; color:var(--muted); line-height:1.55; margin-bottom:10px; font-family:'DM Mono',monospace; font-weight:300; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+
+/* ── ATTACHMENTS ── */
+.card-attachments { display:flex; flex-direction:column; gap:5px; margin-bottom:10px; }
+.attach-item { display:flex; align-items:center; gap:8px; background:var(--bg); border:1px solid var(--col-border); border-radius:8px; padding:6px 10px; text-decoration:none; color:var(--text); transition:all 0.2s; cursor:pointer; }
+.attach-item:hover { border-color:#e3e3e3; background:rgba(227,227,227,0.05); }
+.attach-icon { font-size:14px; flex-shrink:0; }
+.attach-name { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.05em; color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.attach-size { font-family:'DM Mono',monospace; font-size:9px; color:var(--muted); opacity:0.6; flex-shrink:0; }
+.attach-dl { font-size:11px; opacity:0; transition:opacity 0.2s; color:#e3e3e3; flex-shrink:0; }
+.attach-item:hover .attach-dl { opacity:1; }
+.attach-del { background:rgba(0,0,0,0.5); border:none; color:var(--muted); cursor:pointer; font-size:10px; padding:2px 5px; border-radius:4px; transition:all 0.2s; opacity:0; flex-shrink:0; line-height:1; }
+.attach-item:hover .attach-del { opacity:1; }
+.attach-del:hover { color:#e3e3e3; background:rgba(227,227,227,0.12); }
+.cover-del { position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.65); border:1px solid rgba(255,255,255,0.15); color:#fff; cursor:pointer; font-size:11px; padding:3px 7px; border-radius:6px; transition:all 0.2s; z-index:2; line-height:1; }
+.cover-del:hover { background:rgba(227,227,227,0.25); border-color:#e3e3e3; }
+
+.card-footer { display:flex; align-items:center; justify-content:space-between; }
+.card-check {
+  width:22px; height:22px; border-radius:6px; border:2px solid var(--col-border);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  transition:all 0.2s; cursor:pointer; font-size:12px; font-weight:700; line-height:1;
+  position:relative;
+}
+/* state: none (default) — empty */
+/* state: in-progress — orange/amber */
+.task-card.in-progress .card-check { background:#f59e0b; border-color:#f59e0b; color:#282828; }
+/* state: done — green */
+.task-card.done .card-check { background:#4fffb0; border-color:#4fffb0; color:#282828; }
+/* state: not-done — red */
+.task-card.not-done .card-check { background:#ff4d6a; border-color:#ff4d6a; color:#fff; }
+
+/* ── STATUS POPUP ── */
+.status-popup {
+  position:fixed; z-index:999;
+  background:#1e1e28; border:1px solid var(--col-border);
+  border-radius:12px; padding:6px;
+  display:none; flex-direction:column; gap:4px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  min-width:170px;
+  animation:popIn 0.15s cubic-bezier(0.34,1.56,0.64,1);
+}
+.status-popup.open { display:flex; }
+@keyframes popIn { from{opacity:0;transform:scale(0.92)} to{opacity:1;transform:scale(1)} }
+.status-opt {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 12px; border-radius:8px; cursor:pointer;
+  transition:background 0.15s; border:none; background:transparent;
+  width:100%; text-align:left;
+}
+.status-opt:hover { background:rgba(255,255,255,0.06); }
+.status-opt-dot {
+  width:16px; height:16px; border-radius:4px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.status-opt-label {
+  font-family:'Syne',sans-serif; font-size:13px; font-weight:600; color:var(--text);
+}
+.card-time { font-family:'DM Mono',monospace; font-size:9px; color:var(--muted); }
+.card-deadline { display:inline-flex; align-items:center; gap:4px; font-family:'DM Mono',monospace; font-size:9px; padding:3px 7px; border-radius:6px; font-weight:500; }
+.card-deadline.dl-ok    { background:rgba(79,255,176,0.12); color:#4fffb0; border:1px solid rgba(79,255,176,0.25); }
+.card-deadline.dl-soon  { background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid rgba(245,158,11,0.25); }
+.card-deadline.dl-over  { background:rgba(255,77,106,0.12); color:#ff4d6a; border:1px solid rgba(255,77,106,0.3); animation:dlPulse 2s ease infinite; }
+@keyframes dlPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+.dl-quick {
+  background:var(--bg); border:1px solid var(--col-border); border-radius:8px;
+  padding:6px 12px; color:var(--muted); font-family:'DM Mono',monospace;
+  font-size:10px; letter-spacing:0.05em; cursor:pointer; transition:all 0.18s;
+}
+.dl-quick:hover { border-color:#e3e3e3; color:#e3e3e3; background:rgba(227,227,227,0.07); }
+.dl-quick.active { border-color:#7c6aff; color:#a99fff; background:rgba(124,106,255,0.12); }
+.dl-quick-clear { border-color:transparent; color:var(--muted); }
+.dl-quick-clear:hover { border-color:#ff4d6a; color:#ff4d6a; background:rgba(255,77,106,0.07); }
+input[type="date"], input[type="time"] { color-scheme: dark; }
+.card-del { background:transparent; border:none; color:var(--muted); cursor:pointer; padding:3px; border-radius:5px; transition:all 0.2s; opacity:0; }
+.task-card:hover .card-del { opacity:1; }
+.card-del:hover { color:#e3e3e3; }
+.card-attach-btn { background:transparent; border:1px solid var(--col-border); color:var(--muted); cursor:pointer; padding:5px 8px; border-radius:7px; transition:all 0.2s; opacity:0; font-size:15px; line-height:1; flex-shrink:0; }
+.task-card:hover .card-attach-btn { opacity:1; }
+.card-attach-btn:hover { color:#e3e3e3; border-color:#e3e3e3; background:rgba(227,227,227,0.08); }
+.card-file-input { display:none; }
+.col-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; color:var(--muted); font-family:'DM Mono',monospace; font-size:11px; text-align:center; padding:30px 16px; opacity:0.45; }
+.col-empty-icon { font-size:26px; opacity:0.3; }
+
+/* ── MODALS ── */
+.modal-overlay { position:fixed; inset:0; z-index:500; background:var(--modal-bg); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; padding:20px; opacity:0; visibility:hidden; transition:opacity 0.3s ease,visibility 0.3s ease; }
+.modal-overlay.open { opacity:1; visibility:visible; }
+.modal { background:var(--surface); border:1px solid var(--col-border); border-radius:20px; width:100%; max-width:520px; padding:30px; transform:translateY(20px) scale(0.97); transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1); max-height:90vh; overflow-y:auto; }
+.modal-overlay.open .modal { transform:translateY(0) scale(1); }
+.modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:26px; }
+.modal-title { font-size:17px; font-weight:800; letter-spacing:-0.02em; background:linear-gradient(135deg,var(--text),var(--muted)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.modal-close { width:32px; height:32px; border-radius:8px; background:var(--bg); border:1px solid var(--col-border); color:var(--muted); cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; }
+.modal-close:hover { color:#e3e3e3; border-color:#e3e3e3; }
+.form-group { margin-bottom:18px; }
+.form-label { display:block; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:var(--muted); margin-bottom:7px; }
+.form-input, .form-textarea, .form-select { width:100%; background:var(--bg); border:1px solid var(--col-border); border-radius:11px; padding:12px 15px; color:var(--text); font-family:'Syne',sans-serif; font-size:14px; outline:none; transition:border-color 0.2s,box-shadow 0.2s; }
+.form-input::placeholder, .form-textarea::placeholder { color:var(--muted); }
+.form-input:focus, .form-textarea:focus, .form-select:focus { border-color:#e3e3e3; box-shadow:0 0 0 3px rgba(227,227,227,0.1); }
+.form-textarea { resize:vertical; min-height:80px; line-height:1.55; }
+.form-select option { background:var(--bg); }
+
+/* ── ADVANCED COLOR PICKER ── */
+.cp-wrap { background:var(--bg); border:1px solid var(--col-border); border-radius:12px; padding:14px; user-select:none; }
+.cp-top { display:flex; gap:10px; margin-bottom:12px; height:160px; }
+/* Gradient canvas */
+#cpCanvas { border-radius:7px; cursor:crosshair; flex:1; width:100%; height:160px; display:block; }
+/* Hue bar */
+.cp-hue-wrap { position:relative; width:18px; flex-shrink:0; height:160px; }
+#cpHue { width:18px; height:160px; border-radius:5px; cursor:pointer; display:block;
+  background:linear-gradient(to bottom,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00); }
+.cp-hue-thumb { position:absolute; left:-3px; width:24px; height:6px; border-radius:3px;
+  border:2px solid #fff; box-shadow:0 0 4px rgba(0,0,0,0.6); pointer-events:none; top:0; }
+/* Gradient circle thumb */
+.cp-grad-thumb { position:absolute; width:12px; height:12px; border-radius:50%;
+  border:2px solid #fff; box-shadow:0 0 4px rgba(0,0,0,0.7); pointer-events:none;
+  transform:translate(-50%,-50%); top:0%; left:100%; }
+.cp-grad-wrap { position:relative; flex:1; height:160px; }
+/* Preview + hex row */
+.cp-bottom { display:flex; align-items:center; gap:10px; }
+.cp-preview { width:44px; height:32px; border-radius:7px; border:1px solid var(--col-border); flex-shrink:0; }
+.cp-hex-wrap { display:flex; align-items:center; gap:6px; flex:1; background:var(--col); border:1px solid var(--col-border); border-radius:8px; padding:6px 10px; }
+.cp-hash { font-family:'DM Mono',monospace; font-size:13px; color:var(--muted); }
+.cp-hex-input { background:transparent; border:none; outline:none; font-family:'DM Mono',monospace; font-size:13px; color:var(--text); width:70px; letter-spacing:0.1em; }
+.cp-rgb-row { display:flex; gap:6px; margin-top:10px; }
+.cp-rgb-field { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; }
+.cp-rgb-field label { font-family:'DM Mono',monospace; font-size:9px; letter-spacing:0.15em; color:var(--muted); text-transform:uppercase; }
+.cp-rgb-field input { width:100%; background:var(--col); border:1px solid var(--col-border); border-radius:6px; padding:5px 6px; color:var(--text); font-family:'DM Mono',monospace; font-size:12px; text-align:center; outline:none; }
+.cp-rgb-field input:focus { border-color:#e3e3e3; }
+
+/* ── FILE UPLOAD ── */
+.file-upload-area { border:1.5px dashed var(--col-border); border-radius:12px; padding:22px 16px; text-align:center; cursor:pointer; transition:all 0.2s; }
+.file-upload-area:hover { border-color:#e3e3e3; }
+.file-upload-area input { display:none; }
+.file-upload-label { font-family:'DM Mono',monospace; font-size:11px; letter-spacing:0.1em; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:7px; }
+.file-upload-label span { font-size:24px; opacity:0.4; }
+.pending-files { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+.pending-file { display:flex; align-items:center; gap:8px; background:var(--bg); border:1px solid var(--col-border); border-radius:8px; padding:6px 10px; }
+.pending-file-name { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pending-file-rm { background:transparent; border:none; color:var(--muted); cursor:pointer; font-size:13px; padding:0 2px; transition:color 0.2s; }
+.pending-file-rm:hover { color:#e3e3e3; }
+
+.form-submit { width:100%; padding:13px; background:#e3e3e3; border:none; border-radius:12px; color:#282828; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; cursor:pointer; transition:all 0.2s; margin-top:4px; }
+.form-submit:hover { transform:translateY(-1px); box-shadow:0 8px 28px rgba(255,255,255,0.2); background:#f0f0f0; }
+.form-submit:active { transform:translateY(0); }
+
+/* ── IMAGE LIGHTBOX ── */
+#lightbox { position:fixed; inset:0; z-index:3000; background:rgba(0,0,0,0.92); display:none; align-items:center; justify-content:center; padding:24px; cursor:zoom-out; animation:fadeIn 0.2s ease; }
+#lightbox.open { display:flex; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+#lightbox img { max-width:90vw; max-height:88vh; object-fit:contain; border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.6); }
+.lb-close { position:fixed; top:20px; right:24px; background:rgba(50,50,50,0.9); border:1px solid var(--col-border); color:var(--text); width:36px; height:36px; border-radius:50%; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; z-index:3001; }
+.lb-close:hover { color:#e3e3e3; border-color:#e3e3e3; }
+.lb-dl { position:fixed; top:20px; right:68px; background:rgba(50,50,50,0.9); border:1px solid var(--col-border); color:var(--text); width:36px; height:36px; border-radius:50%; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; z-index:3001; text-decoration:none; }
+.lb-dl:hover { color:var(--accent3); border-color:var(--accent3); }
+
+::-webkit-scrollbar { width:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--col-border); border-radius:99px; }
+@keyframes fadeDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+@media(max-width:768px){.board{grid-template-columns:repeat(2,1fr)!important}}
+@media(max-width:480px){.board{grid-template-columns:1fr!important}.column{border-right:none!important;border-bottom:1px solid var(--col-border)}}
+
+/* ── ŞİFRE EKRANI ── */
+#lockScreen {
+  position:fixed; inset:0; z-index:3000; background:var(--bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px;
+  transition:opacity 0.6s ease, visibility 0.6s ease;
+}
+#lockScreen.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+.lock-box {
+  background:var(--surface); border:1px solid var(--col-border);
+  border-radius:18px; padding:28px 32px; display:flex; flex-direction:column;
+  align-items:center; gap:16px; width:280px; animation:fadeUp 0.5s 0.1s both;
+}
+.lock-title { font-size:11px; font-weight:700; letter-spacing:0.12em; color:var(--muted); text-transform:uppercase; font-family:'DM Mono',monospace; }
+.lock-dots { display:flex; gap:10px; margin:4px 0; }
+.lock-dot { width:12px; height:12px; border-radius:50%; border:2px solid var(--col-border); transition:all 0.2s; }
+.lock-dot.filled { background:#e3e3e3; border-color:#e3e3e3; }
+.lock-pad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:100%; }
+.lock-key {
+  background:var(--bg); border:1px solid var(--col-border); border-radius:10px;
+  padding:14px 0; font-family:'DM Mono',monospace; font-size:16px; font-weight:500;
+  color:var(--text); cursor:pointer; text-align:center; transition:all 0.15s; user-select:none;
+}
+.lock-key:hover { background:var(--col); border-color:#555; }
+.lock-key:active { transform:scale(0.93); }
+.lock-key.del { font-size:12px; color:var(--muted); }
+.lock-key.del:hover { color:#e3e3e3; }
+.lock-error { font-family:'DM Mono',monospace; font-size:11px; color:#ff4d6a; letter-spacing:0.05em; height:14px; }
+.lock-error.shake { animation:lockShake 0.4s ease; }
+@keyframes lockShake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-7px)} 40%,80%{transform:translateX(7px)} }
+
+/* ── DRAG & DROP ── */
+.task-card[draggable="true"] { cursor:grab; }
+.task-card[draggable="true"]:active { cursor:grabbing; }
+.task-card.dragging { opacity:0.35; transform:scale(0.97); pointer-events:none; }
+.col-body.drag-over { background:rgba(124,106,255,0.07); border-radius:10px; outline:2px dashed rgba(124,106,255,0.4); outline-offset:-4px; }
+.drag-ghost { position:fixed; pointer-events:none; z-index:9999; opacity:0.92; transform:rotate(2deg) scale(1.03); transition:none; }
+
+/* ── TOAST BİLDİRİMLER ── */
+.toast-wrap { position:fixed; bottom:96px; right:32px; z-index:1500; display:flex; flex-direction:column-reverse; gap:8px; pointer-events:none; }
+.toast { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:12px; font-family:'DM Mono',monospace; font-size:11px; pointer-events:auto; min-width:220px; max-width:320px; box-shadow:0 8px 24px rgba(0,0,0,0.45); animation:toastIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+.toast.hiding { animation:toastOut 0.3s ease forwards; }
+@keyframes toastIn  { from{opacity:0;transform:translateX(40px) scale(0.95)} to{opacity:1;transform:translateX(0) scale(1)} }
+@keyframes toastOut { from{opacity:1;transform:translateX(0) scale(1)} to{opacity:0;transform:translateX(40px) scale(0.9)} }
+.toast.toast-over { background:#2a1218; border:1px solid #ff4d6a55; color:#ff8fa3; }
+.toast.toast-soon { background:#221a0a; border:1px solid #f59e0b55; color:#fbbf24; }
+.toast-icon { font-size:15px; flex-shrink:0; }
+.toast-text { flex:1; line-height:1.45; }
+.toast-text b { display:block; color:#e8e8f2; font-size:11px; margin-bottom:1px; }
+.toast-close { background:transparent; border:none; color:inherit; opacity:0.4; cursor:pointer; font-size:13px; padding:0 2px; transition:opacity 0.15s; flex-shrink:0; }
+.toast-close:hover { opacity:1; }
+.notif-dot { display:none; width:7px; height:7px; border-radius:50%; background:#ff4d6a; animation:dlPulse 1.5s ease infinite; flex-shrink:0; }
+.notif-dot.visible { display:inline-block; }
+
+/* ── CHAT PROFİL MODAL ── */
+.chat-profile-overlay {
+  position:fixed; inset:0; z-index:2000; background:var(--modal-bg); backdrop-filter:blur(8px);
+  display:none; align-items:center; justify-content:center; padding:20px;
+}
+.chat-profile-overlay.open { display:flex; }
+.chat-profile-box {
+  background:var(--surface); border:1px solid var(--col-border); border-radius:20px;
+  padding:32px; display:flex; flex-direction:column; align-items:center;
+  gap:18px; width:300px; animation:fadeUp 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.cp-avatar-wrap { position:relative; cursor:pointer; }
+.cp-avatar {
+  width:80px; height:80px; border-radius:50%; background:var(--bg);
+  border:2px dashed var(--col-border); display:flex; align-items:center;
+  justify-content:center; font-size:28px; color:var(--muted); overflow:hidden;
+  transition:border-color 0.2s;
+}
+.cp-avatar:hover { border-color:#e3e3e3; }
+.cp-avatar img { width:100%; height:100%; object-fit:cover; }
+.cp-avatar-badge { position:absolute; bottom:-4px; right:-4px; background:#7c6aff; border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#fff; border:2px solid var(--surface); }
+</style>
+</head>
+<body>
+
+<!-- TOAST BİLDİRİMLER -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- CHAT PROFİL MODAL -->
+<div class="chat-profile-overlay" id="chatProfileOverlay" onclick="if(event.target===this&&chatProfile)closeChatProfile()">
+  <div class="chat-profile-box">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted)" id="chatProfileTitle">Chat Profili</div>
+    <div class="cp-avatar-wrap" onclick="document.getElementById('chatAvatarInput').click()">
+      <div class="cp-avatar" id="chatAvatarPreview">
+        <i class="fa-solid fa-user"></i>
+      </div>
+      <div class="cp-avatar-badge"><i class="fa-solid fa-camera" style="font-size:9px"></i></div>
+      <input type="file" id="chatAvatarInput" accept="image/*" style="display:none" onchange="previewChatAvatar(event)">
+    </div>
+    <input class="form-input" id="chatNameInput" type="text" placeholder="Adın *" maxlength="30"
+      style="width:100%;text-align:center"
+      onkeydown="if(event.key==='Enter')saveChatProfile()">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-align:center;line-height:1.6;opacity:0.7">Bu bilgiler chat mesajlarında görünür.<br>İstediğin zaman değiştirebilirsin.</div>
+    <div id="chatProfileError" style="font-family:'DM Mono',monospace;font-size:11px;color:#ff4d6a;height:14px"></div>
+    <button onclick="saveChatProfile()"
+      style="width:100%;padding:12px;background:#e3e3e3;border:none;border-radius:11px;color:#282828;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s"
+      onmouseover="this.style.background='#f0f0f0'"
+      onmouseout="this.style.background='#e3e3e3'" id="chatProfileSaveBtn">Kaydet</button>
+  </div>
+</div>
+
+<!-- ŞİFRE EKRANI -->
+<div id="lockScreen">
+  <div id="lockLogo" style="animation:introFade 0.6s ease both">
+    <img src="logo.png" style="width:100px;height:100px;object-fit:contain">
+  </div>
+  <div class="lock-box">
+    <div class="lock-title">Şifre Girin</div>
+    <div style="position:relative;width:100%">
+      <input id="lockInputEl" type="password" maxlength="40"
+        placeholder=""
+        onkeydown="if(event.key==='Enter')checkPass()"
+        oninput="document.getElementById('lockError').textContent=''"
+        style="width:100%;background:var(--bg);border:1px solid var(--col-border);border-radius:11px;padding:12px 16px;color:var(--text);font-family:'DM Mono',monospace;font-size:18px;letter-spacing:0.25em;outline:none;transition:border-color 0.2s;text-align:center"
+        onfocus="this.style.borderColor='#e3e3e3'"
+        onblur="this.style.borderColor='var(--col-border)'">
+    </div>
+    <div class="lock-error" id="lockError"></div>
+    <button onclick="checkPass()"
+      style="width:100%;padding:12px;background:#e3e3e3;border:none;border-radius:11px;color:#282828;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s"
+      onmouseover="this.style.background='#f0f0f0'"
+      onmouseout="this.style.background='#e3e3e3'">Giriş</button>
+  </div>
+</div>
+
+<!-- INTRO -->
+<div id="intro">
+  <div id="introIcon"><img src="logo.png" style="width:200px;height:200px;object-fit:contain"></div>
+  <div class="intro-dots"><span></span><span></span><span></span></div>
+</div>
+
+<!-- STATUS POPUP -->
+<div class="status-popup" id="statusPopup">
+  <button class="status-opt" onclick="setStatus('none')">
+    <div class="status-opt-dot" style="border:2px solid #555"></div>
+    <span class="status-opt-label">Belirsiz</span>
+  </button>
+  <button class="status-opt" onclick="setStatus('inProgress')">
+    <div class="status-opt-dot" style="background:#f59e0b">
+      <svg width="10" height="2" viewBox="0 0 10 2" fill="none"><path d="M1 1H9" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"/></svg>
+    </div>
+    <span class="status-opt-label">Devam Ediyor</span>
+  </button>
+  <button class="status-opt" onclick="setStatus('done')">
+    <div class="status-opt-dot" style="background:#4fffb0">
+      <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <span class="status-opt-label">Tamamlandı</span>
+  </button>
+  <button class="status-opt" onclick="setStatus('notDone')">
+    <div class="status-opt-dot" style="background:#ff4d6a">
+      <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1 1L8 8M8 1L1 8" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"/></svg>
+    </div>
+    <span class="status-opt-label">Tamamlanmadı</span>
+  </button>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" onclick="closeLightbox(event)">
+  <button class="lb-close" onclick="document.getElementById('lightbox').classList.remove('open')">✕</button>
+  <a class="lb-dl" id="lbDl" download title="İndir">⬇</a>
+  <img id="lbImg" src="" alt="">
+</div>
+
+<!-- APP -->
+<div class="app" id="mainApp">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:20px">
+      <div class="logo-area">
+        <div class="logo-box" id="logoBox"><img src="logo.png" alt="logo"></div>
+        <div class="brand">WorkFlow Board</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;border-left:1px solid var(--col-border);padding-left:20px">
+        <div id="clockTime" style="font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:var(--text);letter-spacing:0.05em;line-height:1"></div>
+        <div id="clockDate" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase"></div>
+      </div>
+    </div>
+    <div class="stats-mini" style="position:relative">
+      <span>Toplam <b id="statTotal">0</b></span>
+      <span>Tamamlandı <b id="statDone" style="color:var(--accent3)">0</b></span>
+      <span style="display:flex;align-items:center;gap:5px">Kalan <b id="statLeft" style="color:#e3e3e3">0</b><div class="notif-dot" id="notifDot" title="Deadline uyarısı var"></div></span>
+    </div>
+    <div class="view-tabs">
+      <button class="view-tab active" id="tabBoard" onclick="switchView('board')">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="0" y="0" width="5.5" height="5.5" rx="1.5" fill="currentColor"/><rect x="7.5" y="0" width="5.5" height="5.5" rx="1.5" fill="currentColor"/><rect x="0" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor"/><rect x="7.5" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor"/></svg>
+        Board
+      </button>
+      <button class="view-tab" id="tabGantt" onclick="switchView('gantt')">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="0" y="1" width="8" height="2.5" rx="1.2" fill="currentColor"/><rect x="3" y="5.25" width="10" height="2.5" rx="1.2" fill="currentColor"/><rect x="1" y="9.5" width="6" height="2.5" rx="1.2" fill="currentColor"/></svg>
+        Gantt
+      </button>
+      <button class="view-tab" id="tabChat" onclick="switchView('chat')">
+        <i class="fa-solid fa-message" style="font-size:11px"></i>
+        Chat
+      </button>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <div id="emptyBoard" class="empty-board">
+      <div class="empty-board-icon">✦</div>
+      <div class="empty-board-text">Henüz kategori yok.<br>Başlamak için bir kategori ekle.</div>
+      <button class="add-cat-btn" onclick="openCatModal()"><span style="font-size:18px;line-height:1">+</span> Kategori Ekle</button>
+    </div>
+    <div id="board" class="board" style="display:none"></div>
+  </div>
+
+  <!-- GANTT VIEW -->
+  <div id="ganttView" style="display:none; flex:1; flex-direction:column;">
+    <div id="ganttInner" class="gantt-wrap"></div>
+  </div>
+
+  <!-- CHAT VIEW -->
+  <div id="chatView" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0">
+    <div id="chatLog" style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:8px;min-height:0"></div>
+    <div id="chatPendingFiles" style="display:none;flex-wrap:wrap;gap:6px;padding:8px 20px 0;background:var(--col)"></div>
+    <div style="display:flex;align-items:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--col-border);background:var(--col);flex-shrink:0">
+      <button id="chatProfileBtn" onclick="openChatProfile()"
+        style="width:36px;height:36px;border-radius:50%;flex-shrink:0;background:var(--surface);border:1px solid var(--col-border);cursor:pointer;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text);font-size:14px;transition:all 0.2s"
+        onmouseover="this.style.background='#444'" onmouseout="this.style.background='var(--surface)'">
+        <i class="fa-solid fa-user"></i>
+      </button>
+      <textarea id="chatInput" placeholder="Mesaj yaz..." rows="1"
+        style="flex:1;background:var(--bg);border:1px solid var(--col-border);border-radius:12px;padding:10px 14px;color:var(--text);font-family:'Syne',sans-serif;font-size:13px;outline:none;resize:none;line-height:1.5;max-height:100px;overflow-y:auto;transition:border-color 0.2s"
+        onfocus="this.style.borderColor='#e3e3e3'" onblur="this.style.borderColor='var(--col-border)'"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMsg()}"></textarea>
+      <input type="file" id="chatFileInput" multiple style="display:none" onchange="handleChatFiles(event)">
+      <button onclick="document.getElementById('chatFileInput').click()"
+        style="width:36px;height:36px;border-radius:50%;flex-shrink:0;background:var(--surface);border:1px solid var(--col-border);color:var(--text);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s"
+        onmouseover="this.style.background='#444'" onmouseout="this.style.background='var(--surface)'">
+        <i class="fa-solid fa-paperclip"></i>
+      </button>
+      <button onclick="sendChatMsg()"
+        style="width:36px;height:36px;border-radius:50%;flex-shrink:0;background:var(--surface);border:1px solid var(--col-border);color:var(--text);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s"
+        onmouseover="this.style.background='#444'" onmouseout="this.style.background='var(--surface)'">
+        <i class="fa-solid fa-paper-plane"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="fab-wrap" id="fabWrap">
+  <div class="fab-children" id="fabChildren">
+    <div class="fab-child">
+      <span class="fab-child-label">Yeni Görev</span>
+      <button class="fab-child-btn" onclick="fabOpenTask()" title="Görev ekle">
+        <i class="fa-solid fa-file"></i>
+      </button>
+    </div>
+    <div class="fab-child">
+      <span class="fab-child-label">Kategori Ekle</span>
+      <button class="fab-child-btn" onclick="fabOpenCat()" title="Kategori ekle">
+        <i class="fa-solid fa-folder"></i>
+      </button>
+    </div>
+  </div>
+  <button class="fab-main" id="fabMain" onclick="toggleFab()">
+    <i class="fa-solid fa-list"></i>
+  </button>
+</div>
+
+<!-- MODAL: KATEGORİ -->
+<div class="modal-overlay" id="catOverlay" onclick="closeCatOutside(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Yeni Kategori</div>
+      <button class="modal-close" onclick="closeCatModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Kategori Adı *</label>
+      <input class="form-input" id="catName" type="text" placeholder="Örn: Tasarım, Geliştirme..." maxlength="30"
+        onkeydown="if(event.key==='Enter') addCategory()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Renk</label>
+      <div class="cp-wrap">
+        <div class="cp-top">
+          <div class="cp-grad-wrap">
+            <canvas id="cpCanvas" width="220" height="160"></canvas>
+            <div class="cp-grad-thumb" id="cpGradThumb"></div>
+          </div>
+          <div class="cp-hue-wrap">
+            <canvas id="cpHue" width="18" height="160"></canvas>
+            <div class="cp-hue-thumb" id="cpHueThumb"></div>
+          </div>
+        </div>
+        <div class="cp-bottom">
+          <div class="cp-preview" id="cpPreview"></div>
+          <div class="cp-hex-wrap">
+            <span class="cp-hash">#</span>
+            <input class="cp-hex-input" id="cpHexInput" maxlength="6" value="7c6aff" oninput="cpHexChanged()">
+          </div>
+        </div>
+        <div class="cp-rgb-row">
+          <div class="cp-rgb-field">
+            <label>R</label>
+            <input type="number" id="cpR" min="0" max="255" value="124" oninput="cpRGBChanged()">
+          </div>
+          <div class="cp-rgb-field">
+            <label>G</label>
+            <input type="number" id="cpG" min="0" max="255" value="106" oninput="cpRGBChanged()">
+          </div>
+          <div class="cp-rgb-field">
+            <label>B</label>
+            <input type="number" id="cpB" min="0" max="255" value="255" oninput="cpRGBChanged()">
+          </div>
+        </div>
+      </div>
+    </div>
+    <button class="form-submit" onclick="addCategory()">+ Kategori Oluştur</button>
+  </div>
+</div>
+
+<!-- MODAL: GÖREV -->
+<div class="modal-overlay" id="taskOverlay" onclick="closeTaskOutside(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Yeni Görev</div>
+      <button class="modal-close" onclick="closeTaskModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Başlık *</label>
+      <input class="form-input" id="fTitle" type="text" placeholder="Görev başlığı..." maxlength="80">
+    </div>
+    <div class="form-group">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+        <label class="form-label" style="margin-bottom:0">Açıklama</label>
+        <button type="button" onclick="openDescModal()" title="Geniş editörde aç"
+          style="background:transparent;border:1px solid var(--col-border);border-radius:7px;padding:4px 10px;color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.08em;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.2s"
+          onmouseover="this.style.borderColor='#e3e3e3';this.style.color='#e3e3e3'"
+          onmouseout="this.style.borderColor='var(--col-border)';this.style.color='var(--muted)'">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 4V1h3M10 4V1H7M1 7v3h3M10 7v3H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Genişlet
+        </button>
+      </div>
+      <textarea class="form-textarea" id="fDesc" placeholder="Görevi açıkla..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Kategori</label>
+      <select class="form-select" id="fCat"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ekleyen</label>
+      <div style="position:relative">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none">👤</span>
+        <input class="form-input" id="fAuthor" type="text" placeholder="Adınız..." maxlength="40" style="padding-left:36px">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Son Tarih (Deadline)</label>
+      <!-- Quick shortcuts -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="dlShortcuts">
+        <button type="button" class="dl-quick" onclick="setDeadlineShortcut(0)">Bugün</button>
+        <button type="button" class="dl-quick" onclick="setDeadlineShortcut(1)">Yarın</button>
+        <button type="button" class="dl-quick" onclick="setDeadlineShortcut(3)">3 Gün</button>
+        <button type="button" class="dl-quick" onclick="setDeadlineShortcut(7)">1 Hafta</button>
+        <button type="button" class="dl-quick" onclick="setDeadlineShortcut(14)">2 Hafta</button>
+        <button type="button" class="dl-quick dl-quick-clear" onclick="clearDeadline()">✕ Temizle</button>
+      </div>
+      <!-- Date + Time row -->
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1;position:relative">
+          <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none">📅</span>
+          <input class="form-input" id="fDeadlineDate" type="date"
+            style="padding-left:36px;cursor:pointer"
+            oninput="syncDeadline()">
+        </div>
+        <div style="flex:0 0 auto;position:relative">
+          <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none">🕐</span>
+          <input class="form-input" id="fDeadlineTime" type="time" value="09:00"
+            style="padding-left:36px;width:130px;cursor:pointer"
+            oninput="syncDeadline()">
+        </div>
+      </div>
+      <!-- Preview pill -->
+      <div id="dlPreview" style="margin-top:8px;display:none">
+        <span id="dlPreviewText" style="font-family:'DM Mono',monospace;font-size:11px;padding:5px 12px;border-radius:8px;background:rgba(124,106,255,0.12);border:1px solid rgba(124,106,255,0.3);color:#a99fff;display:inline-block"></span>
+      </div>
+      <input type="hidden" id="fDeadline">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Dosya / Görsel Ekle</label>
+      <div class="file-upload-area" onclick="document.getElementById('fFiles').click()">
+        <input type="file" id="fFiles" multiple onchange="handleFiles(event)">
+        <div class="file-upload-label">
+          <span>📎</span>
+          Dosya seç veya buraya sürükle<br>
+          <span style="font-size:9px;opacity:0.6">(Resim, PDF, Word, Excel, ZIP…)</span>
+        </div>
+      </div>
+      <div class="pending-files" id="pendingFilesList"></div>
+    </div>
+    <button class="form-submit" onclick="addTask()">+ Görevi Ekle</button>
+  </div>
+</div>
+
+<script>
+  /* ── DATA ── */
+  let categories = [];
+  let tasks      = [];
+  let pendingFiles = [];
+  let currentRGB = {r:124, g:106, b:255};
+  let _fbListening = false;
+
+
+
+  /* ── ŞİFRE (Firebase'den alınır) ── */
+  let _sitePass = null;
+
+  function checkPass() {
+    if (_sitePass === null) {
+      const err = document.getElementById('lockError');
+      err.textContent = 'Bağlanılıyor...';
+      return;
+    }
+    const val = document.getElementById('lockInputEl').value;
+    if (val === _sitePass) {
+      sessionStorage.setItem('wf_unlocked', '1');
+      document.getElementById('lockScreen').classList.add('hidden');
+      startIntro();
+    } else {
+      document.getElementById('lockInputEl').value = '';
+      const err = document.getElementById('lockError');
+      err.textContent = 'Hatalı şifre, tekrar dene';
+      err.classList.remove('shake');
+      void err.offsetWidth;
+      err.classList.add('shake');
+      document.getElementById('lockInputEl').focus();
+    }
+  }
+
+  function startIntro() {
+    // Start Firebase realtime listeners
+    startFirebaseListener();
+    startChatListener();
+    setTimeout(() => {
+      document.getElementById('intro').classList.add('hidden');
+      document.getElementById('mainApp').classList.add('visible');
+      renderBoard();
+    }, 2500);
+  }
+
+  window.addEventListener('load', () => {
+    if (sessionStorage.getItem('wf_unlocked') === '1') {
+      document.getElementById('lockScreen').classList.add('hidden');
+      startIntro();
+    } else {
+      // Şifreyi Firebase'den çek, sonra giriş ekranını göster
+      db.collection('config').doc('auth').get().then(function(doc) {
+        if (doc.exists) _sitePass = doc.data().password;
+        setTimeout(() => document.getElementById('lockInputEl').focus(), 100);
+      }).catch(function() {
+        setTimeout(() => document.getElementById('lockInputEl').focus(), 100);
+      });
+    }
+  });
+
+  /* ── CHAT PROFİL ── */
+  let chatProfile = JSON.parse(localStorage.getItem('wf_chat_profile') || 'null');
+  let chatMessages = [];
+
+  /* ── CHAT DEPOLAMA (Firebase) ── */
+  function saveChat() {
+    // Chat mesajları gerçek zamanlı dinleyici ile Firebase'e kaydedilir
+    // sendChatMsg içinde doğrudan Firebase'e yazılır
+  }
+
+  function loadChatMessages(callback) {
+    db.collection('chat').orderBy('id').get().then(function(snap) {
+      var msgs = snap.docs.map(function(d) { return d.data(); });
+      callback(msgs);
+    }).catch(function() { callback([]); });
+  }
+
+  let _cpAvatarData = chatProfile ? chatProfile.avatar : null;
+
+  function updateChatProfileBtn() {
+    var btn = document.getElementById('chatProfileBtn');
+    if (!btn) return;
+    if (chatProfile && chatProfile.avatar) {
+      btn.innerHTML = '<img src="' + chatProfile.avatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+    } else {
+      btn.innerHTML = '<i class="fa-solid fa-user"></i>';
+    }
+  }
+
+  function openChatProfile() {
+    document.getElementById('chatProfileOverlay').classList.add('open');
+    if (chatProfile) {
+      document.getElementById('chatNameInput').value = chatProfile.name || '';
+      if (chatProfile.avatar) {
+        document.getElementById('chatAvatarPreview').innerHTML =
+          `<img src="${chatProfile.avatar}" style="width:100%;height:100%;object-fit:cover">`;
+        _cpAvatarData = chatProfile.avatar;
+      }
+    }
+    setTimeout(() => document.getElementById('chatNameInput').focus(), 100);
+  }
+
+  function closeChatProfile() {
+    document.getElementById('chatProfileOverlay').classList.remove('open');
+    document.getElementById('chatProfileError').textContent = '';
+  }
+
+  function previewChatAvatar(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      _cpAvatarData = ev.target.result;
+      document.getElementById('chatAvatarPreview').innerHTML =
+        `<img src="${_cpAvatarData}" style="width:100%;height:100%;object-fit:cover">`;
+    };
+    r.readAsDataURL(file);
+  }
+
+  function saveChatProfile() {
+    const name = document.getElementById('chatNameInput').value.trim();
+    const err  = document.getElementById('chatProfileError');
+    if (!name) { err.textContent = 'Ad zorunlu'; return; }
+    chatProfile = { name, avatar: _cpAvatarData || null };
+    localStorage.setItem('wf_chat_profile', JSON.stringify(chatProfile));
+    localStorage.setItem('wf_last_author', chatProfile.name);
+    updateChatProfileBtn();
+    // Önce kapat
+    document.getElementById('chatProfileOverlay').classList.remove('open');
+    document.getElementById('chatProfileError').textContent = '';
+    // Sonra chat'i güncelle
+    const chatView = document.getElementById('chatView');
+    if (chatView && chatView.style.display !== 'none') {
+      loadChatMessages(function(msgs) {
+        chatMessages = msgs;
+        renderChat();
+        setTimeout(function(){ document.getElementById('chatInput').focus(); }, 100);
+      });
+    }
+  }
+
+  /* ── LOGO ── */
+
+
+
+  /* ── COLOR PICKER ── */
+  let cpHue = 252, cpSat = 0.51, cpVal = 1.0; // HSV
+
+  function cpInit() {
+    const gc = document.getElementById('cpCanvas');
+    const hc = document.getElementById('cpHue');
+
+    // Match canvas internal resolution to its CSS display size
+    const gcRect = gc.getBoundingClientRect();
+    const hcRect = hc.getBoundingClientRect();
+    gc.width  = gcRect.width  || 220;
+    gc.height = gcRect.height || 160;
+    hc.width  = hcRect.width  || 18;
+    hc.height = hcRect.height || 160;
+
+    drawHue(); drawGrad(); syncThumbs(); cpUpdateAll();
+
+    // Hue drag
+    let hDrag = false;
+    hc.addEventListener('mousedown', e => { hDrag=true; e.preventDefault(); cpHuePick(e); });
+    window.addEventListener('mousemove', e => { if(hDrag) cpHuePick(e); });
+    window.addEventListener('mouseup', () => hDrag=false);
+    hc.addEventListener('touchstart', e => { e.preventDefault(); cpHuePick(e.touches[0]); }, {passive:false});
+    hc.addEventListener('touchmove',  e => { e.preventDefault(); cpHuePick(e.touches[0]); }, {passive:false});
+
+    // Grad drag
+    let gDrag = false;
+    gc.addEventListener('mousedown', e => { gDrag=true; e.preventDefault(); cpGradPick(e); });
+    window.addEventListener('mousemove', e => { if(gDrag) cpGradPick(e); });
+    window.addEventListener('mouseup', () => gDrag=false);
+    gc.addEventListener('touchstart', e => { e.preventDefault(); cpGradPick(e.touches[0]); }, {passive:false});
+    gc.addEventListener('touchmove',  e => { e.preventDefault(); cpGradPick(e.touches[0]); }, {passive:false});
+  }
+
+  function drawHue() {
+    const c = document.getElementById('cpHue');
+    const ctx = c.getContext('2d');
+    const grad = ctx.createLinearGradient(0,0,0,c.height);
+    for(let i=0;i<=360;i+=30) grad.addColorStop(i/360, `hsl(${i},100%,50%)`);
+    ctx.fillStyle = grad; ctx.fillRect(0,0,c.width,c.height);
+  }
+
+  function drawGrad() {
+    const c = document.getElementById('cpCanvas');
+    const ctx = c.getContext('2d');
+    const w = c.width, h = c.height;
+    ctx.clearRect(0,0,w,h);
+    const gH = ctx.createLinearGradient(0,0,w,0);
+    gH.addColorStop(0,'#fff'); gH.addColorStop(1,`hsl(${cpHue},100%,50%)`);
+    ctx.fillStyle = gH; ctx.fillRect(0,0,w,h);
+    const gV = ctx.createLinearGradient(0,0,0,h);
+    gV.addColorStop(0,'rgba(0,0,0,0)'); gV.addColorStop(1,'#000');
+    ctx.fillStyle = gV; ctx.fillRect(0,0,w,h);
+  }
+
+  function cpHuePick(e) {
+    const c = document.getElementById('cpHue');
+    const rect = c.getBoundingClientRect();
+    const rawY = e.clientY - rect.top;
+    const y = Math.max(0, Math.min(rect.height, rawY));
+    cpHue = Math.round((y / rect.height) * 360);
+    drawGrad();
+    document.getElementById('cpHueThumb').style.top = `calc(${y/rect.height*100}% - 3px)`;
+    cpUpdateAll();
+  }
+
+  function cpGradPick(e) {
+    const c = document.getElementById('cpCanvas');
+    const rect = c.getBoundingClientRect();
+    const rawX = e.clientX - rect.left;
+    const rawY = e.clientY - rect.top;
+    const x = Math.max(0, Math.min(rect.width,  rawX));
+    const y = Math.max(0, Math.min(rect.height, rawY));
+    cpSat = x / rect.width;
+    cpVal = 1 - y / rect.height;
+    const th = document.getElementById('cpGradThumb');
+    th.style.left = (x/rect.width*100)+'%';
+    th.style.top  = (y/rect.height*100)+'%';
+    cpUpdateAll();
+  }
+
+  function cpUpdateAll() {
+    const rgb = hsvToRgb(cpHue, cpSat, cpVal);
+    const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+    currentRGB = rgb;
+    document.getElementById('cpPreview').style.background = `rgb(${rgb.r},${rgb.g},${rgb.b})`;
+    document.getElementById('cpHexInput').value = hex.slice(1);
+    document.getElementById('cpR').value = rgb.r;
+    document.getElementById('cpG').value = rgb.g;
+    document.getElementById('cpB').value = rgb.b;
+    // thumb border color for visibility
+    document.getElementById('cpGradThumb').style.borderColor = cpVal > 0.5 ? '#333' : '#fff';
+  }
+
+  function cpHexChanged() {
+    const val = document.getElementById('cpHexInput').value.replace(/[^0-9a-fA-F]/g,'');
+    if (val.length === 6) {
+      const r = parseInt(val.slice(0,2),16), g = parseInt(val.slice(2,4),16), b = parseInt(val.slice(4,6),16);
+      const hsv = rgbToHsv(r,g,b);
+      cpHue=hsv.h; cpSat=hsv.s; cpVal=hsv.v;
+      drawGrad(); syncThumbs(); cpUpdateAll();
+    }
+  }
+
+  function cpRGBChanged() {
+    const r = Math.min(255,Math.max(0,parseInt(document.getElementById('cpR').value)||0));
+    const g = Math.min(255,Math.max(0,parseInt(document.getElementById('cpG').value)||0));
+    const b = Math.min(255,Math.max(0,parseInt(document.getElementById('cpB').value)||0));
+    const hsv = rgbToHsv(r,g,b);
+    cpHue=hsv.h; cpSat=hsv.s; cpVal=hsv.v;
+    drawGrad(); syncThumbs(); cpUpdateAll();
+  }
+
+  function syncThumbs() {
+    const gc = document.getElementById('cpCanvas');
+    const th = document.getElementById('cpGradThumb');
+    th.style.left  = (cpSat*100)+'%';
+    th.style.top   = ((1-cpVal)*100)+'%';
+    const hc = document.getElementById('cpHue');
+    const ht = document.getElementById('cpHueThumb');
+    ht.style.top   = `calc(${cpHue/360*100}% - 3px)`;
+  }
+
+  /* ── COLOR MATH ── */
+  function hsvToRgb(h,s,v) {
+    let r,g,b; const i=Math.floor(h/60)%6, f=h/60-Math.floor(h/60);
+    const p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+    if(i===0){r=v;g=t;b=p} else if(i===1){r=q;g=v;b=p} else if(i===2){r=p;g=v;b=t}
+    else if(i===3){r=p;g=q;b=v} else if(i===4){r=t;g=p;b=v} else{r=v;g=p;b=q}
+    return {r:Math.round(r*255), g:Math.round(g*255), b:Math.round(b*255)};
+  }
+
+  function rgbToHsv(r,g,b) {
+    r/=255; g/=255; b/=255;
+    const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+    let h=0, s=max===0?0:d/max, v=max;
+    if(d!==0){
+      if(max===r) h=((g-b)/d+6)%6;
+      else if(max===g) h=(b-r)/d+2;
+      else h=(r-g)/d+4;
+      h*=60;
+    }
+    return {h,s,v};
+  }
+
+  function rgbToHex(r,g,b) {
+    return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+  }
+
+  function getRGBHex() {
+    return rgbToHex(currentRGB.r, currentRGB.g, currentRGB.b);
+  }
+
+  /* ── CAT MODAL ── */
+  function openCatModal() {
+    document.getElementById('catOverlay').classList.add('open');
+    setTimeout(() => {
+      cpInit();
+      syncThumbs();
+      document.getElementById('catName').focus();
+    }, 50);
+  }
+  function closeCatModal() {
+    document.getElementById('catOverlay').classList.remove('open');
+    document.getElementById('catName').value = '';
+    cpHue=252; cpSat=0.51; cpVal=1.0; currentRGB={r:124,g:106,b:255};
+  }
+  function closeCatOutside(e) { if(e.target===document.getElementById('catOverlay')) closeCatModal(); }
+
+  function addCategory() {
+    const name = document.getElementById('catName').value.trim();
+    if (!name) { document.getElementById('catName').focus(); return; }
+    categories.push({ id: Date.now(), name, color: getRGBHex() });
+    save(); closeCatModal(); renderBoard();
+  }
+
+  function deleteCategory(id) {
+    if (!confirm('Bu kategoriyi ve görevlerini silmek istiyor musun?')) return;
+    categories = categories.filter(c => c.id !== id);
+    tasks = tasks.filter(t => t.catId !== id);
+    save(); renderBoard();
+  }
+
+  /* ── FAB CONTROLS ── */
+  function toggleFab() {
+    const wrap = document.getElementById('fabWrap');
+    const btn  = document.getElementById('fabMain');
+    wrap.classList.toggle('open');
+    btn.classList.toggle('open');
+  }
+
+  function fabOpenTask() {
+    closeFab();
+    openTaskModal();
+  }
+
+  function fabOpenCat() {
+    closeFab();
+    openCatModal();
+  }
+
+  function closeFab() {
+    document.getElementById('fabWrap').classList.remove('open');
+    document.getElementById('fabMain').classList.remove('open');
+  }
+
+  // Close fab when clicking outside
+  document.addEventListener('click', e => {
+    const wrap = document.getElementById('fabWrap');
+    if (wrap && !wrap.contains(e.target)) closeFab();
+  });
+
+  /* ── TASK MODAL ── */
+  function openTaskModal(prefillCatId) {
+    const sel = document.getElementById('fCat');
+    sel.innerHTML = categories.map(c =>
+      `<option value="${c.id}" ${c.id===prefillCatId?'selected':''}>${c.name}</option>`
+    ).join('');
+    document.getElementById('taskOverlay').classList.add('open');
+    const lastAuthor = localStorage.getItem('wf_last_author');
+    if (lastAuthor) document.getElementById('fAuthor').value = lastAuthor;
+    setTimeout(() => document.getElementById('fTitle').focus(), 300);
+  }
+  function closeTaskModal() {
+    document.getElementById('taskOverlay').classList.remove('open');
+    document.getElementById('fTitle').value = '';
+    document.getElementById('fDesc').value = '';
+    document.getElementById('fAuthor').value = '';
+    document.getElementById('fDeadline').value = '';
+    document.getElementById('fDeadlineDate').value = '';
+    document.getElementById('fDeadlineTime').value = '09:00';
+    document.getElementById('dlPreview').style.display = 'none';
+    document.querySelectorAll('.dl-quick').forEach(b => b.classList.remove('active'));
+    pendingFiles = [];
+    document.getElementById('pendingFilesList').innerHTML = '';
+  }
+  function closeTaskOutside(e) { if(e.target===document.getElementById('taskOverlay')) closeTaskModal(); }
+
+  /* ── FILE HANDLING ── */
+  function handleFiles(e) {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        pendingFiles.push({ name: file.name, size: file.size, type: file.type, data: ev.target.result });
+        renderPendingFiles();
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  }
+
+  function renderPendingFiles() {
+    const list = document.getElementById('pendingFilesList');
+    list.innerHTML = pendingFiles.map((f,i) => `
+      <div class="pending-file">
+        <span style="font-size:14px">${fileIcon(f.type)}</span>
+        <span class="pending-file-name">${esc(f.name)}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted)">${fmtSize(f.size)}</span>
+        <button class="pending-file-rm" onclick="removePendingFile(${i})">✕</button>
+      </div>`).join('');
+  }
+
+  function removePendingFile(i) {
+    pendingFiles.splice(i, 1);
+    renderPendingFiles();
+  }
+
+  function fileIcon(type) {
+    if (type.startsWith('image/')) return '🖼️';
+    if (type === 'application/pdf') return '📄';
+    if (type.includes('word') || type.includes('document')) return '📝';
+    if (type.includes('excel') || type.includes('sheet')) return '📊';
+    if (type.includes('zip') || type.includes('compressed')) return '🗜️';
+    if (type.includes('video')) return '🎬';
+    if (type.includes('audio')) return '🎵';
+    if (type.includes('text')) return '📃';
+    return '📎';
+  }
+
+  function fmtSize(bytes) {
+    if (bytes < 1024) return bytes + 'B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + 'KB';
+    return (bytes/(1024*1024)).toFixed(1) + 'MB';
+  }
+
+  /* ── ADD TASK ── */
+  function addTask() {
+    const title = document.getElementById('fTitle').value.trim();
+    if (!title) { document.getElementById('fTitle').focus(); return; }
+    const catId    = parseInt(document.getElementById('fCat').value);
+    const desc     = document.getElementById('fDesc').value.trim();
+    const deadline = document.getElementById('fDeadline').value || null;
+    const author   = document.getElementById('fAuthor').value.trim() || null;
+    if (author) localStorage.setItem('wf_last_author', author);
+    tasks.push({
+      id: Date.now(), title, desc, catId,
+      files: [...pendingFiles],
+      done: false, status: 'none',
+      deadline, author,
+      createdAt: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit',minute:'2-digit'})
+    });
+    save(); closeTaskModal(); renderBoard();
+  }
+
+  /* ── STATUS POPUP ── */
+  let _popupTaskId = null;
+
+  function openStatusPopup(e, id) {
+    e.stopPropagation();
+    _popupTaskId = id;
+    const popup = document.getElementById('statusPopup');
+    popup.classList.add('open');
+    // Position near the check button
+    const rect = e.currentTarget.getBoundingClientRect();
+    let top = rect.bottom + 6;
+    let left = rect.left;
+    // Keep inside viewport
+    if (left + 180 > window.innerWidth) left = window.innerWidth - 186;
+    if (top + 180 > window.innerHeight) top = rect.top - 186;
+    popup.style.top  = top  + 'px';
+    popup.style.left = left + 'px';
+  }
+
+  function setStatus(status) {
+    const t = tasks.find(t => String(t.id) === String(_popupTaskId));
+    if (t) {
+      t.status = status;
+      t.done   = status === 'done';
+      save(); updateStats(); renderBoard();
+    }
+    closeStatusPopup();
+  }
+
+  function closeStatusPopup() {
+    document.getElementById('statusPopup').classList.remove('open');
+    _popupTaskId = null;
+  }
+
+  document.addEventListener('click', e => {
+    const popup = document.getElementById('statusPopup');
+    if (popup.classList.contains('open') && !popup.contains(e.target)) {
+      closeStatusPopup();
+    }
+  });
+
+  /* ── DELETE ── */
+  function deleteTask(e, id) {
+    e.stopPropagation();
+    tasks = tasks.filter(t => String(t.id) !== String(id));
+    save(); updateStats(); renderBoard();
+  }
+
+  /* ── ADD FILE TO EXISTING TASK ── */
+  function addFileToTask(e, id) {
+    e.stopPropagation();
+    const files = Array.from(e.target.files);
+    const t = tasks.find(t => String(t.id) === String(id));
+    if (!t) return;
+    if (!t.files) t.files = [];
+    let loaded = 0;
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        t.files.push({ name: file.name, size: file.size, type: file.type, data: ev.target.result });
+        loaded++;
+        if (loaded === files.length) { save(); renderBoard(); }
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  }
+
+  /* ── DELETE FILE FROM TASK ── */
+  function deleteFile(e, taskId, fileIndex) {
+    e.stopPropagation();
+    const t = tasks.find(t => String(t.id) === String(taskId));
+    if (!t || !t.files) return;
+    t.files.splice(fileIndex, 1);
+    save(); renderBoard();
+  }
+  function openLightbox(e, src, name) {
+    e.stopPropagation();
+    document.getElementById('lbImg').src = src;
+    document.getElementById('lbDl').href = src;
+    document.getElementById('lbDl').download = name || 'image';
+    document.getElementById('lightbox').classList.add('open');
+  }
+  function closeLightbox(e) {
+    if (e.target === document.getElementById('lightbox'))
+      document.getElementById('lightbox').classList.remove('open');
+  }
+
+  /* ── DOWNLOAD FILE ── */
+  function downloadFile(e, data, name) {
+    e.stopPropagation();
+    const a = document.createElement('a');
+    a.href = data; a.download = name; a.click();
+  }
+
+  /* ── SAVE (Firebase) ── */
+  function save() {
+    db.collection('board').doc('data').set({
+      categories: categories,
+      tasks: tasks,
+      updatedAt: Date.now()
+    }).catch(e => console.error('Save error:', e));
+  }
+
+  /* ── LOAD & LISTEN (Firebase realtime) ── */
+  function startFirebaseListener() {
+    if (_fbListening) return;
+    _fbListening = true;
+    db.collection('board').doc('data').onSnapshot(doc => {
+      if (!doc.exists) return;
+      const data = doc.data();
+      categories = data.categories || [];
+      tasks = data.tasks || [];
+      // Orphan cleanup
+      const validIds = new Set(categories.map(c => String(c.id)));
+      tasks = tasks.filter(t => validIds.has(String(t.catId)));
+      if (currentView === 'board') renderBoard();
+      else if (currentView === 'gantt') renderGantt();
+      updateStats();
+    }, err => console.error('Listener error:', err));
+  }
+
+  // Chat realtime listener
+  function startChatListener() {
+    db.collection('chat').orderBy('id').onSnapshot(snap => {
+      chatMessages = snap.docs.map(d => d.data());
+      if (currentView === 'chat') renderChat();
+    });
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function setDeadlineShortcut(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    if (days === 0) { d.setHours(23,59,0,0); }
+    else { d.setHours(9,0,0,0); }
+    const dateStr = d.toISOString().slice(0,10);
+    const timeStr = d.toTimeString().slice(0,5);
+    document.getElementById('fDeadlineDate').value = dateStr;
+    document.getElementById('fDeadlineTime').value = timeStr;
+    // highlight active shortcut
+    document.querySelectorAll('.dl-quick').forEach(b => b.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    syncDeadline();
+  }
+
+  function clearDeadline() {
+    document.getElementById('fDeadlineDate').value = '';
+    document.getElementById('fDeadlineTime').value = '09:00';
+    document.getElementById('fDeadline').value = '';
+    document.getElementById('dlPreview').style.display = 'none';
+    document.querySelectorAll('.dl-quick').forEach(b => b.classList.remove('active'));
+  }
+
+  function syncDeadline() {
+    const date = document.getElementById('fDeadlineDate').value;
+    const time = document.getElementById('fDeadlineTime').value || '09:00';
+    if (!date) { document.getElementById('dlPreview').style.display = 'none'; return; }
+    const combined = `${date}T${time}`;
+    document.getElementById('fDeadline').value = combined;
+    // update preview
+    const d = new Date(combined);
+    const now = new Date();
+    const diff = d - now;
+    const days = Math.ceil(diff / (1000*60*60*24));
+    let preview;
+    if (diff < 0) preview = `⚠ Geçmiş tarih seçildi`;
+    else if (days === 0) preview = `⏱ Bugün ${time}`;
+    else if (days === 1) preview = `⏱ Yarın ${time}`;
+    else preview = `📅 ${d.toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long'})} — ${time}`;
+    document.getElementById('dlPreviewText').textContent = preview;
+    document.getElementById('dlPreview').style.display = 'block';
+    // clear active shortcut if user typed manually
+  }
+
+  function deadlineBadge(deadline) {
+    if (!deadline) return '';
+    const now  = new Date();
+    const due  = new Date(deadline);
+    const diff = due - now;
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    let cls, label;
+    if (diff < 0) {
+      const overDays = Math.abs(days);
+      cls   = 'dl-over';
+      label = `⚠ ${overDays}g gecikti`;
+    } else if (diff < 1000 * 60 * 60 * 24 * 3) {
+      const h = Math.ceil(diff / (1000 * 60 * 60));
+      cls   = 'dl-soon';
+      label = h < 24 ? `⏱ ${h}s kaldı` : `⏱ ${days}g kaldı`;
+    } else {
+      cls   = 'dl-ok';
+      label = `📅 ${due.toLocaleDateString('tr-TR',{day:'2-digit',month:'short'})}`;
+    }
+    return `<span class="card-deadline ${cls}">${label}</span>`;
+  }
+
+  /* ── RENDER ── */
+  function updateStats() {
+    const total = tasks.length;
+    const done  = tasks.filter(t => (t.status||'none') === 'done').length;
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statDone').textContent  = done;
+    document.getElementById('statLeft').textContent  = total - done;
+  }
+
+  function renderBoard() {
+    updateStats();
+
+    const board = document.getElementById('board');
+    const empty = document.getElementById('emptyBoard');
+    const fabWrap = document.getElementById('fabWrap');
+
+    if (!categories.length) {
+      board.style.display = 'none'; empty.style.display = 'flex';
+      fabWrap.classList.remove('visible'); return;
+    }
+    empty.style.display = 'none'; board.style.display = 'grid';
+    fabWrap.classList.add('visible');
+    board.style.setProperty('--col-count', categories.length);
+
+    board.innerHTML = categories.map((cat, ci) => {
+      const catTasks = tasks.filter(t => t.catId === cat.id);
+
+      const cardsHTML = catTasks.length ? catTasks.map((t, i) => {
+        const files = t.files || [];
+        const imgFiles   = files.filter(f => f.type.startsWith('image/'));
+        const otherFiles = files.filter(f => !f.type.startsWith('image/'));
+        const coverImg   = imgFiles[0] || null;
+
+        const attachHTML = [
+          ...imgFiles.slice(coverImg?1:0).map(f => {
+            const fi = files.indexOf(f);
+            return `
+            <div class="attach-item" onclick="openLightbox(event,'${f.data}','${esc(f.name)}')">
+              <span class="attach-icon">🖼️</span>
+              <span class="attach-name">${esc(f.name)}</span>
+              <span class="attach-size">${fmtSize(f.size)}</span>
+              <span class="attach-dl">🔍</span>
+              <button class="attach-del" onclick="deleteFile(event,'${t.id}',${fi})" title="Dosyayı sil">✕</button>
+            </div>`;
+          }),
+          ...otherFiles.map(f => {
+            const fi = files.indexOf(f);
+            return `
+            <div class="attach-item" onclick="downloadFile(event,'${f.data}','${esc(f.name)}')">
+              <span class="attach-icon">${fileIcon(f.type)}</span>
+              <span class="attach-name">${esc(f.name)}</span>
+              <span class="attach-size">${fmtSize(f.size)}</span>
+              <span class="attach-dl">⬇</span>
+              <button class="attach-del" onclick="deleteFile(event,'${t.id}',${fi})" title="Dosyayı sil">✕</button>
+            </div>`;
+          })
+        ].join('');
+
+        const coverHTML = coverImg ? (() => {
+          const fi = files.indexOf(coverImg);
+          return `<div style="position:relative">
+            <img class="card-img" src="${coverImg.data}" alt="" onclick="openLightbox(event,'${coverImg.data}','${esc(coverImg.name)}')">
+            <button class="cover-del" onclick="deleteFile(event,'${t.id}',${fi})" title="Görseli sil">✕</button>
+          </div>`;
+        })() : '';
+
+        const status = t.status || (t.done ? 'done' : 'none');
+        const statusClass = status === 'done' ? 'done' : status === 'inProgress' ? 'in-progress' : status === 'notDone' ? 'not-done' : '';
+        const checkIcon = status === 'done'
+          ? `<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+          : status === 'inProgress'
+          ? `<svg width="10" height="2" viewBox="0 0 10 2" fill="none"><path d="M1 1H9" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"/></svg>`
+          : status === 'notDone'
+          ? `<svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1 1L8 8M8 1L1 8" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"/></svg>`
+          : '';
+
+        return `
+          <div class="task-card${statusClass ? ' '+statusClass : ''}" draggable="true"
+            data-task-id="${t.id}" style="animation-delay:${i*0.05}s"
+            ondragstart="onCardDragStart(event,'${t.id}')"
+            ondragend="onCardDragEnd(event)">
+            <div class="card-accent-line" style="background:${cat.color}"></div>
+            ${coverHTML}
+            <div class="card-body">
+              <div class="card-title">${esc(t.title)}</div>
+              ${attachHTML ? `<div class="card-attachments">${attachHTML}</div>` : ''}
+              <div class="card-footer">
+                <div class="card-check" onclick="openStatusPopup(event,'${t.id}')" title="Durum seç">${checkIcon}</div>
+                <div style="display:flex;align-items:center;gap:8px" onclick="event.stopPropagation()">
+                  ${deadlineBadge(t.deadline)}
+                  ${t.desc ? `<button onclick="openCardDesc(event,'${t.id}')" title="Açıklamayı gör"
+                    style="background:transparent;border:1px solid var(--col-border);border-radius:6px;padding:3px 8px;color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;display:flex;align-items:center;gap:4px;transition:all 0.2s;white-space:nowrap"
+                    onmouseover="this.style.borderColor='#e3e3e3';this.style.color='#e3e3e3'"
+                    onmouseout="this.style.borderColor='var(--col-border)';this.style.color='var(--muted)'">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M5 4.5v3M5 3h.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                    Açıklama
+                  </button>` : ''}
+                  ${t.files&&t.files.length?`<span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted)">📎 ${t.files.length}</span>`:''}
+                  ${t.author?`<span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);display:flex;align-items:center;gap:3px">👤 ${esc(t.author)}</span>`:''}
+                  <div class="card-time">${t.createdAt}</div>
+                  <input type="file" class="card-file-input" id="cfi-${t.id}" multiple onchange="addFileToTask(event,'${t.id}')">
+                  <button class="card-attach-btn" onclick="event.stopPropagation();document.getElementById('cfi-${t.id}').click()" title="Dosya ekle">📎</button>
+                  <button class="card-del" onclick="deleteTask(event,'${t.id}')" title="Sil">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }).join('')
+      : `<div class="col-empty"><div class="col-empty-icon">✦</div>Görev yok<br><span style="font-size:10px;opacity:0.6">+ butonuyla ekle</span></div>`;
+
+      return `
+        <div class="column" style="animation-delay:${ci*0.05}s">
+          <div class="col-header">
+            <div class="col-title">
+              <div class="col-dot" style="background:${cat.color}"></div>
+              <div class="col-name" style="color:${cat.color}" onclick="openTaskModal(${cat.id})" title="Buraya görev ekle">${esc(cat.name)}</div>
+            </div>
+            <div class="col-header-right">
+              <div class="col-count">${catTasks.length}</div>
+              <button class="col-del-btn" onclick="deleteCategory(${cat.id})" title="Sil">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="col-body"
+            data-cat-id="${cat.id}"
+            ondragover="onColDragOver(event)"
+            ondragleave="onColDragLeave(event)"
+            ondrop="onColDrop(event,${cat.id})">${cardsHTML}</div>
+        </div>`;
+    }).join('');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('chatProfileOverlay').classList.contains('open')) { if(chatProfile) closeChatProfile(); return; }
+      if (document.getElementById('cardDescPopup').style.display === 'flex') { closeCardDesc(); return; }
+      if (document.getElementById('descOverlay').classList.contains('open')) { closeDescModal(); return; }
+      closeCatModal(); closeTaskModal();
+      document.getElementById('lightbox').classList.remove('open');
+    }
+  });
+
+  /* ── VIEW SWITCH ── */
+  let currentView = 'board';
+
+  function switchView(view) {
+    currentView = view;
+    const boardWrap = document.querySelector('.board-wrap');
+    const ganttView = document.getElementById('ganttView');
+    const chatView  = document.getElementById('chatView');
+    const tabBoard  = document.getElementById('tabBoard');
+    const tabGantt  = document.getElementById('tabGantt');
+    const tabChat   = document.getElementById('tabChat');
+    const fabWrap   = document.getElementById('fabWrap');
+
+    boardWrap.style.display = 'none';
+    ganttView.style.display = 'none';
+    chatView.style.display  = 'none';
+    tabBoard.classList.remove('active');
+    tabGantt.classList.remove('active');
+    tabChat.classList.remove('active');
+    fabWrap.classList.remove('visible');
+
+    if (view === 'board') {
+      boardWrap.style.display = 'flex';
+      tabBoard.classList.add('active');
+      renderBoard();
+    } else if (view === 'gantt') {
+      ganttView.style.display = 'flex';
+      tabGantt.classList.add('active');
+      renderGantt();
+    } else if (view === 'chat') {
+      chatView.style.display = 'flex';
+      tabChat.classList.add('active');
+      updateChatProfileBtn();
+      if (!chatProfile) {
+        setTimeout(function(){ openChatProfile(); }, 200);
+      } else {
+        loadChatMessages(function(msgs) {
+          chatMessages = msgs;
+          setTimeout(function(){
+            renderChat();
+            document.getElementById('chatInput').focus();
+          }, 50);
+        });
+      }
+    }
+  }
+
+  /* ── GANTT RENDER ── */
+  function renderGantt() {
+    const container = document.getElementById('ganttInner');
+    const tasksWithDL = tasks.filter(t => t.deadline);
+
+    if (!tasksWithDL.length) {
+      container.innerHTML = `
+        <div class="gantt-empty">
+          <div class="gantt-empty-icon">📅</div>
+          Deadline atanmış görev yok.<br>
+          <span style="font-size:10px;opacity:0.6">Görev eklerken Son Tarih seçmeyi unutma.</span>
+        </div>`;
+      return;
+    }
+
+    const now = new Date();
+
+    // Determine range: from earliest createdAt (approx today - 7) to latest deadline + 3 days
+    const deadlineDates = tasksWithDL.map(t => new Date(t.deadline));
+    const rangeStart = new Date(now);
+    rangeStart.setDate(rangeStart.getDate() - 5);
+    rangeStart.setHours(0,0,0,0);
+    const maxDL = new Date(Math.max(...deadlineDates));
+    maxDL.setDate(maxDL.getDate() + 3);
+    const rangeEnd = maxDL;
+
+    const totalMs   = rangeEnd - rangeStart;
+    const totalDays = Math.ceil(totalMs / (1000*60*60*24));
+    const dayW      = Math.max(28, Math.min(60, Math.floor(900 / totalDays)));
+
+    // Build day headers
+    const dayLabels = [];
+    for (let i = 0; i < totalDays; i++) {
+      const d = new Date(rangeStart);
+      d.setDate(d.getDate() + i);
+      const isToday = d.toDateString() === now.toDateString();
+      const isMon   = d.getDay() === 1;
+      const label   = (i === 0 || isMon || isToday)
+        ? d.toLocaleDateString('tr-TR', {day:'numeric', month:'short'})
+        : (isToday ? 'Bugün' : '');
+      dayLabels.push({ d, isToday, label });
+    }
+
+    const pct = ms => Math.max(0, Math.min(100, (ms - rangeStart) / totalMs * 100));
+
+    // Group by category
+    const grouped = categories.map(cat => ({
+      cat,
+      rows: tasksWithDL.filter(t => t.catId === cat.id)
+    })).filter(g => g.rows.length);
+
+    const headerHTML = `
+      <div class="gantt-header-row">
+        ${dayLabels.map(dl => `
+          <div class="gantt-day-label ${dl.isToday ? 'gantt-today-label' : ''}" style="width:${dayW}px;flex-shrink:0">
+            ${dl.label}
+          </div>`).join('')}
+      </div>`;
+
+    const rowsHTML = grouped.map(g => {
+      const catRows = g.rows.map(t => {
+        const due     = new Date(t.deadline);
+        const created = new Date(now);
+        created.setDate(created.getDate() - 1); // treat start as yesterday
+
+        const startPct = pct(created);
+        const endPct   = pct(due);
+        const widthPct = Math.max(0.5, endPct - startPct);
+
+        const status   = t.status || (t.done ? 'done' : 'none');
+        const isOver   = due < now && status !== 'done';
+        const isDone   = status === 'done';
+
+        const barClass = isDone ? 'status-done' : isOver ? 'status-over' : '';
+
+        // today line pct
+        const todayPct = pct(now);
+
+        // Determine bar color: darken the category color a bit
+        const barColor = g.cat.color;
+
+        // Grid lines HTML (only dates)
+        const gridLines = dayLabels.map((dl, i) => {
+          const x = (i / totalDays * 100);
+          return `<div class="gantt-grid-line ${dl.isToday ? 'gantt-grid-today' : ''}" style="left:${x}%"></div>`;
+        }).join('');
+
+        // Deadline pin
+        const pinPct = pct(due);
+        const pinColor = isOver ? '#ff4d6a' : isDone ? '#4fffb0' : '#f59e0b';
+
+        const dueLabel = due.toLocaleDateString('tr-TR',{day:'numeric',month:'short'});
+        const statusLabel = isDone ? '✓ Tamamlandı' : isOver ? `⚠ ${dueLabel} geçti` : `📅 ${dueLabel}`;
+
+        return `
+          <div class="gantt-row">
+            <div class="gantt-row-label">
+              <div class="gantt-row-title" title="${esc(t.title)}" style="display:flex;align-items:center;gap:6px">
+                ${isDone ? `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#4fffb0" fill-opacity="0.18" stroke="#4fffb0" stroke-width="1.2"/><path d="M4 7L6 9.5L10 5" stroke="#4fffb0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>` : isOver ? `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="6.5" fill="#ff4d6a" fill-opacity="0.15" stroke="#ff4d6a" stroke-width="1.2"/><path d="M7 4.5V7.5" stroke="#ff4d6a" stroke-width="1.8" stroke-linecap="round"/><circle cx="7" cy="9.5" r="0.8" fill="#ff4d6a"/></svg>` : ''}
+                <span style="overflow:hidden;text-overflow:ellipsis">${esc(t.title)}</span>
+              </div>
+              <div class="gantt-row-cat" style="color:${g.cat.color}">${esc(g.cat.name)}</div>
+              ${t.author ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);display:flex;align-items:center;gap:3px;margin-top:1px">👤 ${esc(t.author)}</div>` : ''}
+            </div>
+            <div class="gantt-timeline" style="width:${totalDays * dayW}px;flex-shrink:0">
+              ${gridLines}
+              <div class="gantt-bar-track"></div>
+              <div class="gantt-bar ${barClass}" title="${esc(t.title)} — ${statusLabel}"
+                style="left:${startPct}%;width:${widthPct}%;background:${barColor};opacity:${isDone?0.4:isOver?0.9:0.85}">
+                <span class="gantt-bar-label">${esc(t.title)}</span>
+                ${isDone ? `<svg width="11" height="9" viewBox="0 0 11 9" fill="none" style="flex-shrink:0;margin-left:6px"><path d="M1 4.5L4 7.5L10 1" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+              </div>
+              <div class="gantt-deadline-pin" style="left:calc(${pinPct}% - 1px);background:${pinColor}" title="${statusLabel}"></div>
+              <div class="gantt-grid-today" style="position:absolute;left:${todayPct}%;top:0;bottom:0;width:2px;background:#7c6aff;opacity:0.5"></div>
+            </div>
+          </div>`;
+      }).join('');
+
+      return `
+        <div style="margin-bottom:6px">
+          <div style="padding-left:0;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <div style="width:6px;height:6px;border-radius:50%;background:${g.cat.color};flex-shrink:0"></div>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:${g.cat.color}">${esc(g.cat.name)}</span>
+          </div>
+          ${catRows}
+          <div class="gantt-sep"></div>
+        </div>`;
+    }).join('');
+
+    const legendHTML = `
+      <div class="gantt-legend">
+        <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:#4fffb0;opacity:0.45"></div>Tamamlandı</div>
+        <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:#888;opacity:0.85"></div>Devam ediyor</div>
+        <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:#ff4d6a"></div>Gecikmeli</div>
+        <div class="gantt-legend-item" style="margin-left:auto">
+          <div style="width:2px;height:10px;background:#7c6aff;border-radius:1px"></div>Bugün
+          <div style="width:2px;height:10px;background:#f59e0b;border-radius:1px;margin-left:10px"></div>Deadline
+        </div>
+      </div>`;
+
+    container.innerHTML = `
+      <div class="gantt-container" style="width:${220 + totalDays * dayW}px">
+        ${headerHTML}
+        ${rowsHTML}
+        ${legendHTML}
+      </div>`;
+  }
+
+  /* ── DRAG & DROP ── */
+  let _dragTaskId = null;
+
+  function onCardDragStart(e, taskId) {
+    _dragTaskId = taskId;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', taskId);
+    setTimeout(() => {
+      const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+      if (card) card.classList.add('dragging');
+    }, 0);
+  }
+
+  function onCardDragEnd(e) {
+    _dragTaskId = null;
+    document.querySelectorAll('.task-card.dragging').forEach(c => c.classList.remove('dragging'));
+    document.querySelectorAll('.col-body.drag-over').forEach(c => c.classList.remove('drag-over'));
+  }
+
+  function onColDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.currentTarget.classList.add('drag-over');
+  }
+
+  function onColDragLeave(e) {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      e.currentTarget.classList.remove('drag-over');
+    }
+  }
+
+  function onColDrop(e, catId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const taskId = e.dataTransfer.getData('text/plain') || _dragTaskId;
+    if (!taskId) return;
+    const t = tasks.find(t => String(t.id) === String(taskId));
+    if (!t || t.catId === catId) return;
+    t.catId = catId;
+    save(); renderBoard();
+  }
+
+  /* ── DEADLINE NOTIFICATIONS ── */
+  const _notifShown = new Set();
+
+  function checkDeadlines() {
+    const now = new Date();
+    const dot = document.getElementById('notifDot');
+    let hasUrgent = false;
+
+    tasks.forEach(t => {
+      if (!t.deadline) return;
+      const status = t.status || (t.done ? 'done' : 'none');
+      if (status === 'done') return;
+
+      const due  = new Date(t.deadline);
+      const diff = due - now;
+      const h    = diff / (1000 * 60 * 60);
+
+      if (diff < 0 && !_notifShown.has('over_' + t.id)) {
+        _notifShown.add('over_' + t.id);
+        hasUrgent = true;
+        showToast(t, 'over');
+        sendBrowserNotif(`⚠ Deadline geçti: ${t.title}`, 'Bu görevin süresi doldu.');
+      } else if (diff > 0 && h <= 2 && !_notifShown.has('soon_' + t.id)) {
+        _notifShown.add('soon_' + t.id);
+        hasUrgent = true;
+        showToast(t, 'soon');
+        sendBrowserNotif(`⏱ Deadline yaklaşıyor: ${t.title}`, `${Math.ceil(h * 60)} dakika kaldı.`);
+      }
+
+      if (diff < 0 || h <= 2) hasUrgent = true;
+    });
+
+    dot.classList.toggle('visible', hasUrgent);
+  }
+
+  function showToast(task, type) {
+    const wrap = document.getElementById('toastWrap');
+    const due  = new Date(task.deadline);
+    const sub  = type === 'over'
+      ? `${due.toLocaleDateString('tr-TR',{day:'numeric',month:'short'})} tarihinde doldu`
+      : `${Math.ceil((due - new Date()) / 60000)} dakika kaldı`;
+
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.innerHTML = `
+      <span class="toast-icon">${type === 'over' ? '🚨' : '⏰'}</span>
+      <span class="toast-text"><b>${task.title}</b>${sub}</span>
+      <button class="toast-close" onclick="dismissToast(this)">✕</button>`;
+    wrap.appendChild(el);
+
+    setTimeout(() => dismissToast(el.querySelector('.toast-close')), 5000);
+  }
+
+  function dismissToast(btn) {
+    const el = btn.closest ? btn.closest('.toast') : btn;
+    if (!el || el.classList.contains('hiding')) return;
+    el.classList.add('hiding');
+    setTimeout(() => el.remove(), 300);
+  }
+
+  function sendBrowserNotif(title, body) {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '' });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(p => {
+        if (p === 'granted') new Notification(title, { body });
+      });
+    }
+  }
+
+  // Request permission early
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+
+  /* ── CARD DESC POPUP ── */
+  let _cardDescTaskId = null;
+
+  function openCardDesc(e, taskId) {
+    e.stopPropagation();
+    const t = tasks.find(t => String(t.id) === String(taskId));
+    if (!t || !t.desc) return;
+    _cardDescTaskId = taskId;
+    document.getElementById('cardDescText').textContent = t.desc;
+    // render saved desc images
+    const imgWrap = document.getElementById('cardDescImages');
+    const imgs = t.descImages || [];
+    imgWrap.innerHTML = imgs.map((src, i) => `
+      <div style="position:relative">
+        <img src="${src}" style="width:100%;border-radius:10px;display:block;cursor:zoom-in" onclick="openLightbox(event,'${src}','görsel')">
+        <button onclick="removeDescImage(${i})" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);color:#fff;cursor:pointer;font-size:11px;padding:3px 7px;border-radius:6px;line-height:1;transition:all 0.2s" onmouseover="this.style.background='rgba(255,77,106,0.7)'" onmouseout="this.style.background='rgba(0,0,0,0.6)'">✕</button>
+      </div>`).join('');
+    document.getElementById('cardDescPopup').style.display = 'flex';
+  }
+
+  function addDescPopupImages(e) {
+    const files = Array.from(e.target.files);
+    const t = tasks.find(t => String(t.id) === String(_cardDescTaskId));
+    if (!t) return;
+    if (!t.descImages) t.descImages = [];
+    let loaded = 0;
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        t.descImages.push(ev.target.result);
+        loaded++;
+        if (loaded === files.length) {
+          save();
+          openCardDesc({ stopPropagation: () => {} }, _cardDescTaskId);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  }
+
+  function removeDescImage(index) {
+    const t = tasks.find(t => String(t.id) === String(_cardDescTaskId));
+    if (!t || !t.descImages) return;
+    t.descImages.splice(index, 1);
+    save();
+    openCardDesc({ stopPropagation: () => {} }, _cardDescTaskId);
+  }
+
+  function closeCardDesc() {
+    document.getElementById('cardDescPopup').style.display = 'none';
+    _cardDescTaskId = null;
+    document.getElementById('cdpImgInput').value = '';
+  }
+
+  /* ── DESC MODAL ── */
+  function openDescModal() {
+    const val = document.getElementById('fDesc').value;
+    document.getElementById('fDescBig').value = val;
+    updateDescCharCount(val);
+    document.getElementById('descOverlay').classList.add('open');
+    setTimeout(() => {
+      const ta = document.getElementById('fDescBig');
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }, 150);
+  }
+
+  function closeDescModal() {
+    document.getElementById('fDesc').value = document.getElementById('fDescBig').value;
+    document.getElementById('descOverlay').classList.remove('open');
+  }
+
+  function syncDescFromBig() {
+    const val = document.getElementById('fDescBig').value;
+    document.getElementById('fDesc').value = val;
+    updateDescCharCount(val);
+  }
+
+  function updateDescCharCount(val) {
+    document.getElementById('descCharCount').textContent = val.length + ' karakter';
+  }
+
+  /* ── CHAT ── */
+  var _chatPendingFiles = [];
+
+  function handleChatFiles(e) {
+    var files = Array.from(e.target.files);
+    files.forEach(function(file) {
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        _chatPendingFiles.push({ name: file.name, type: file.type, size: file.size, data: ev.target.result });
+        renderChatPendingFiles();
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  }
+
+  function renderChatPendingFiles() {
+    var wrap = document.getElementById('chatPendingFiles');
+    if (!wrap) return;
+    if (!_chatPendingFiles.length) { wrap.innerHTML = ''; wrap.style.display = 'none'; return; }
+    wrap.style.display = 'flex';
+    wrap.innerHTML = _chatPendingFiles.map(function(f, i) {
+      var isImg = f.type.startsWith('image/');
+      return '<div style="position:relative;flex-shrink:0">'
+        + (isImg
+          ? '<img src="' + f.data + '" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--col-border)">'
+          : '<div style="width:52px;height:52px;border-radius:8px;border:1px solid var(--col-border);background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px">'
+            + '<i class="fa-solid fa-file" style="font-size:16px;color:var(--muted)"></i>'
+            + '<span style="font-family:\'DM Mono\',monospace;font-size:7px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:44px;text-align:center">' + esc(f.name.split('.').pop()) + '</span>'
+            + '</div>')
+        + '<button onclick="removeChatPending(' + i + ')" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#ff4d6a;border:none;color:#fff;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  function removeChatPending(i) {
+    _chatPendingFiles.splice(i, 1);
+    renderChatPendingFiles();
+  }
+
+  function sendChatMsg() {
+    if (!chatProfile) { openChatProfile(); return; }
+    var ta = document.getElementById('chatInput');
+    var text = ta.value.trim();
+    if (!text && !_chatPendingFiles.length) return;
+    var now = new Date();
+    var msg = {
+      id: now.getTime(),
+      text: text,
+      author: chatProfile.name,
+      avatar: chatProfile.avatar || null,
+      files: _chatPendingFiles.length ? _chatPendingFiles.slice() : null,
+      time: now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0'),
+      date: now.toLocaleDateString('tr-TR')
+    };
+    chatMessages.push(msg);
+    // Firebase'e kaydet
+    db.collection('chat').doc(String(msg.id)).set(msg).catch(function(e){ console.error(e); });
+    ta.value = '';
+    ta.style.height = 'auto';
+    _chatPendingFiles = [];
+    renderChatPendingFiles();
+
+    var log = document.getElementById('chatLog');
+    if (!log) { ta.focus(); return; }
+    if (log.querySelector('[data-empty]')) log.innerHTML = '';
+
+    var isMe = true;
+    var bStyle = 'background:#7c6aff;color:#fff;border-radius:14px 14px 4px 14px';
+    var filesHTML = '';
+    if (msg.files && msg.files.length) {
+      filesHTML = '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">';
+      msg.files.forEach(function(f) {
+        if (f.type.startsWith('image/')) {
+          filesHTML += '<img src="' + f.data + '" style="max-width:180px;max-height:140px;border-radius:8px;object-fit:cover;cursor:zoom-in" onclick="openLightbox(event,\'' + f.data + '\',\'' + esc(f.name) + '\')">';
+        } else {
+          filesHTML += '<div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);border-radius:7px;padding:5px 9px;cursor:pointer" onclick="downloadFile(event,\'' + f.data + '\',\'' + esc(f.name) + '\')">'
+            + '<i class="fa-solid fa-file" style="font-size:12px"></i>'
+            + '<span style="font-family:\'DM Mono\',monospace;font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.name) + '</span>'
+            + '</div>';
+        }
+      });
+      filesHTML += '</div>';
+    }
+    var msgHTML = '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;width:100%;margin-bottom:2px">'
+      + '<div style="max-width:60%;padding:10px 14px;font-size:13px;line-height:1.55;word-break:break-word;' + bStyle + '">'
+      + (msg.text ? esc(msg.text) : '') + filesHTML
+      + '</div>'
+      + '<div style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted);display:flex;align-items:center;gap:8px">' + msg.time
+      + '<span onclick="deleteChatMsg(' + msg.id + ')" style="cursor:pointer;opacity:0.4;font-size:10px" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.4\'">✕</span>'
+      + '</div></div>';
+
+    log.insertAdjacentHTML('beforeend', msgHTML);
+    log.scrollTop = log.scrollHeight;
+    ta.focus();
+  }
+
+  function deleteChatMsg(id) {
+    db.collection('chat').doc(String(id)).delete().catch(function(e){ console.error(e); });
+    chatMessages = chatMessages.filter(function(m){ return m.id !== id; });
+    renderChat();
+  }
+
+  function renderChat() {
+    var log = document.getElementById('chatLog');
+    if (!log) return;
+    var me = chatProfile ? chatProfile.name : '';
+
+    if (!chatMessages.length) {
+      log.innerHTML = '<div data-empty style="margin:auto;text-align:center;opacity:0.3;font-family:\'DM Mono\',monospace;font-size:12px;color:var(--muted)">Henüz mesaj yok</div>';
+      return;
+    }
+
+    var html = '';
+    var lastDate = '';
+    for (var i = 0; i < chatMessages.length; i++) {
+      var m = chatMessages[i];
+      var isMe = (m.author === me);
+      if (m.date !== lastDate) {
+        lastDate = m.date;
+        html += '<div style="text-align:center;font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted);padding:8px 0;letter-spacing:0.08em">' + m.date + '</div>';
+      }
+      var filesHTML = '';
+      if (m.files && m.files.length) {
+        filesHTML = '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">';
+        m.files.forEach(function(f) {
+          if (f.type.startsWith('image/')) {
+            filesHTML += '<img src="' + f.data + '" style="max-width:160px;max-height:120px;border-radius:8px;object-fit:cover;cursor:zoom-in" onclick="openLightbox(event,\'' + f.data + '\',\'' + esc(f.name) + '\')">';
+          } else {
+            filesHTML += '<div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.15);border-radius:7px;padding:5px 9px;cursor:pointer" onclick="downloadFile(event,\'' + f.data + '\',\'' + esc(f.name) + '\')">'
+              + '<i class="fa-solid fa-file" style="font-size:12px"></i>'
+              + '<span style="font-family:\'DM Mono\',monospace;font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.name) + '</span>'
+              + '</div>';
+          }
+        });
+        filesHTML += '</div>';
+      }
+      var bStyle = isMe
+        ? 'background:#7c6aff;color:#fff;border-radius:14px 14px 4px 14px'
+        : 'background:var(--surface);border:1px solid var(--col-border);color:var(--text);border-radius:14px 14px 14px 4px';
+      if (isMe) {
+        html += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;width:100%;margin-bottom:2px">'
+          + '<div style="max-width:60%;padding:10px 14px;font-size:13px;line-height:1.55;word-break:break-word;' + bStyle + '">' + (m.text ? esc(m.text) : '') + filesHTML + '</div>'
+          + '<div style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted);display:flex;align-items:center;gap:8px">' + m.time
+          + '<span onclick="deleteChatMsg(' + m.id + ')" style="cursor:pointer;opacity:0.4;font-size:10px" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.4\'">✕</span></div></div>';
+      } else {
+        var av = m.avatar
+          ? '<img src="' + m.avatar + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0">'
+          : '<div style="width:28px;height:28px;border-radius:50%;background:var(--col);border:1px solid var(--col-border);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;color:var(--muted)"><i class=\'fa-solid fa-user\'></i></div>';
+        html += '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;margin-bottom:2px">'
+          + '<div style="display:flex;align-items:flex-end;gap:8px;max-width:60%">' + av
+          + '<div style="display:flex;flex-direction:column;gap:2px">'
+          + '<span style="font-family:\'DM Mono\',monospace;font-size:9px;color:#a99fff;padding-left:2px">' + esc(m.author) + '</span>'
+          + '<div style="padding:10px 14px;font-size:13px;line-height:1.55;word-break:break-word;' + bStyle + '">' + (m.text ? esc(m.text) : '') + filesHTML + '</div>'
+          + '</div></div>'
+          + '<div style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted);padding-left:36px">' + m.time + '</div>'
+          + '</div>';
+      }
+    }
+    log.innerHTML = html;
+    setTimeout(function(){ log.scrollTop = log.scrollHeight; }, 0);
+  }
+
+  /* ── CLOCK ── */
+  function tickClock() {
+    const now = new Date();
+    document.getElementById('clockTime').textContent =
+      now.toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    document.getElementById('clockDate').textContent =
+      now.toLocaleDateString('tr-TR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // renderBoard() artık Firebase listener tetikliyor (startIntro içinde)
+  setInterval(updateStats, 500);
+  checkDeadlines();
+  setInterval(checkDeadlines, 60 * 1000);
+  updateChatProfileBtn();
+</script>
+<!-- MODAL: GENİŞ AÇIKLAMA (görev ekleme) -->
+<div class="modal-overlay" id="descOverlay" onclick="if(event.target===this)closeDescModal()" style="z-index:600;align-items:center;justify-content:center">
+  <div class="modal" style="max-width:680px;height:min(80vh,560px);display:flex;flex-direction:column">
+    <div class="modal-header" style="flex-shrink:0">
+      <div class="modal-title">Açıklama</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="descCharCount" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">0 karakter</span>
+        <button class="modal-close" onclick="closeDescModal()">✕</button>
+      </div>
+    </div>
+    <textarea id="fDescBig"
+      placeholder="Görevin detaylı açıklamasını buraya yaz..."
+      oninput="syncDescFromBig()"
+      style="flex:1;background:var(--bg);border:1px solid var(--col-border);border-radius:12px;padding:16px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;font-weight:300;line-height:1.7;outline:none;resize:none;width:100%;transition:border-color 0.2s"
+      onfocus="this.style.borderColor='#e3e3e3'"
+      onblur="this.style.borderColor='var(--col-border)'"></textarea>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;flex-shrink:0">
+      <button class="form-submit" onclick="closeDescModal()" style="width:auto;padding:10px 28px">Tamam</button>
+    </div>
+  </div>
+</div>
+<!-- POPUP: KART AÇIKLAMA GÖRÜNTÜLE -->
+<div id="cardDescPopup" style="position:fixed;inset:0;z-index:800;display:none;align-items:center;justify-content:center;padding:20px;background:var(--modal-bg);backdrop-filter:blur(8px)" onclick="if(event.target===this)closeCardDesc()">
+  <div style="background:var(--surface);border:1px solid var(--col-border);border-radius:18px;width:100%;max-width:460px;padding:24px;animation:fadeUp 0.3s cubic-bezier(0.34,1.56,0.64,1) both;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted)">Açıklama</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="document.getElementById('cdpImgInput').click()" title="Görsel ekle"
+          style="background:transparent;border:1px solid var(--col-border);border-radius:7px;padding:5px 11px;color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.08em;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.2s"
+          onmouseover="this.style.borderColor='#e3e3e3';this.style.color='#e3e3e3'"
+          onmouseout="this.style.borderColor='var(--col-border)';this.style.color='var(--muted)'">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="4" cy="5" r="1" fill="currentColor"/><path d="M1 9l3-3 2 2 2-2.5 3 3.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Görsel Ekle
+        </button>
+        <input type="file" id="cdpImgInput" accept="image/*" multiple style="display:none" onchange="addDescPopupImages(event)">
+        <button onclick="closeCardDesc()" style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color='#e3e3e3'" onmouseout="this.style.color='var(--muted)'">✕</button>
+      </div>
+    </div>
+    <div id="cardDescText" style="font-family:'DM Mono',monospace;font-size:13px;font-weight:300;color:var(--text);line-height:1.75;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;margin-bottom:12px"></div>
+    <div id="cardDescImages" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+</div>
+
+</body>
+</html>
